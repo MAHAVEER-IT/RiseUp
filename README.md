@@ -1,393 +1,106 @@
-# RiseUp AI
+<div align="center">
+  <img src="images/spark.png" alt="RiseUp icon" width="112" />
 
-RiseUp AI is a local-first Flutter mobile app for personal growth, discipline, confidence, focus, English speaking practice, and daily self-reflection.
+  <h1>RiseUp</h1>
 
-It is not designed as a normal productivity or task app. RiseUp is built to feel like a caring companion, mentor, accountability partner, and confidence coach.
+  <a href="https://github.com/MAHAVEER-IT/RiseUp"><img src="https://readme-typing-svg.demolab.com?font=Nunito&weight=700&size=22&pause=1200&color=4D8C76&center=true&vCenter=true&width=560&lines=Small+steps.+Real+growth.;A+calmer+way+to+keep+moving." alt="Animated RiseUp message" /></a>
 
-## Core Idea
+  **A local-first Flutter companion for focused to-dos, habits, reflection, and gentle momentum.**
 
-RiseUp works around a simple companion system:
+  [![Flutter](https://img.shields.io/badge/Flutter-3.0%2B-4D8C76?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+  [![Dart](https://img.shields.io/badge/Dart-3.0%2B-25463C?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
+  [![Local first](https://img.shields.io/badge/Data-Local--first-F0B08D?style=for-the-badge&logo=shield&logoColor=white)](#privacy-by-design)
+</div>
 
-```text
-Gemini = Brain
-Isar = Memory
-NotificationService = Voice
-Quick Update = User response
-Progress = Proof
-```
+<br />
 
-The app checks in with the user throughout the day, listens through quick updates, saves local memory, and turns small actions into visible proof of progress.
+## ✦ What is RiseUp?
 
-## Target User
+RiseUp is not a pressure-filled productivity app. It is a quiet space for building consistency—one clear task, one small habit, one honest reflection at a time.
 
-RiseUp is built for:
+It keeps the important things close: your data lives on your device, your reminders are scheduled locally, and the experience is designed to encourage progress without guilt.
 
-- College students
-- Placement preparation students
-- Users with low confidence
-- Users distracted by social media
-- Users struggling with discipline and consistency
-- Users improving English speaking and communication skills
+## ✨ Built for everyday momentum
 
-## Main Goals
+| Feature | What it does |
+| --- | --- |
+| **Focused To-Dos** | Create clear tasks, break them into sub-tasks, and set a reminder time. Each reminder includes the task title. |
+| **Reliable reminders** | Android local notifications continue to work while the app is closed, with exact-alarm support where available. |
+| **Habit tracker** | Create a time-bound habit journey; reminders run only while the tracker is active and stop when it ends. |
+| **Progress as proof** | See completed work, active days, milestones, and AI-powered weekly insights. |
+| **Gentle AI support** | Use chat and reflections to turn a stuck moment into one manageable next step. |
+| **Personal rhythm** | Set routine times and receive a calmer experience around your day. |
 
-- Discipline
-- Confidence
-- Focus
-- English speaking
-- Communication skills
-- Motivation
-- Consistency
-- Personal growth
-
-## Tech Stack
-
-- Flutter
-- Material 3
-- Riverpod
-- GoRouter
-- Isar local database
-- Gemini API
-- flutter_local_notifications
-
-No Firebase. No backend. The app stores user data locally on the device.
-
-## Current Features
-
-### Home
-
-The Home page gives a calm overview of the user's day:
-
-- Time-aware greeting
-- Morning check-in prompt
-- Energy-based recommendation
-- Active goals
-- Focus session entry
-- Quick access to RiseUp AI chat
-
-### AI Chat
-
-The AI chat gives supportive coaching.
-
-It is designed to:
-
-- Encourage the user
-- Avoid shame or guilt
-- Celebrate small wins
-- Suggest realistic next steps
-- Help after distraction or low-energy moments
-
-### Companion Notifications
-
-Notifications are treated as the voice of RiseUp, not simple reminders.
-
-The notification system can:
-
-- Request notification permission
-- Create notification channels
-- Schedule companion check-ins
-- Schedule daily reflection reminders
-- Schedule weekly review reminders
-- Trigger achievement notifications
-- Open the correct app screen when tapped
-
-Notification tap behavior:
+## 🔔 Reminder behavior
 
 ```text
-Companion check-in -> Quick Update
-Reflection reminder -> Journal
-Weekly review -> Progress
-Mood reminder -> Check-in
-Achievement -> Home
+To-do created ──► task-specific local reminder
+Habit created ──► 9:30 PM reminders during its active date range
+Habit completed / ended / deleted ──► habit reminders stop
+To-do completed / deleted ──► its reminder is cancelled
 ```
 
-Default companion mode is balanced, which checks in roughly every 2 hours during active day windows.
+> Android note: allow notifications and **Exact alarms** when prompted. If an app is force-stopped from Android Settings, Android prevents scheduled alarms until the app is opened again.
 
-### Quick Update
+## 🔒 Privacy by design
 
-Quick Update lets the user respond fast when RiseUp checks in.
+RiseUp is **local-first**.
 
-Examples:
+- Your profile, to-dos, progress, and reflections are stored on your device.
+- There is no Firebase backend and no required cloud account.
+- Clearing the app's data or uninstalling the app permanently removes its locally stored data.
+- Keep API keys out of source control; the local `.env` file is intentionally private.
 
-- In Lecture
-- Studying
-- DSA
-- DBMS
-- English Practice
-- Project Work
-- Taking Break
-- Instagram
-- YouTube
-- Feeling Tired
-- Feeling Low
+## 🧩 Stack
 
-After a quick update, the app saves the activity and can generate an AI coaching response.
+```text
+Flutter + Material 3        Interface
+Riverpod + GoRouter         State and navigation
+Isar                        On-device app memory
+flutter_local_notifications Scheduled local reminders
+Gemini                      Optional supportive AI coaching
+```
 
-### Daily Check-In
-
-The check-in screen records:
-
-- Mood
-- Energy
-- Morning check-in completion
-
-The app uses this to give gentler, more realistic suggestions.
-
-### Goals And Focus
-
-The goals feature supports:
-
-- Creating goals
-- Priority levels
-- Focus sessions
-- Focus duration tracking
-- Goal-based focus timer navigation
-
-### Journal
-
-The Journal page is the user's self-awareness and confidence builder.
-
-It supports:
-
-- Daily reflection
-- Small win tracking
-- Recent reflection history
-- English speaking practice logging
-- Practice duration
-- Practice type
-- Fluency rating
-- Confidence rating
-- Understanding rating
-
-The journal is not just a diary. It creates proof that the user is improving.
-
-### Progress
-
-The Progress page is the proof page of RiseUp.
-
-It collects data from across the local database:
-
-- Daily check-ins
-- Mood logs
-- Focus sessions
-- Active goals
-- Journal reflections
-- Small wins
-- English practice logs
-- Companion quick updates
-- AI companion responses
-- Achievements
-- Weekly reviews
-
-It shows:
-
-- Proof score
-- Check-in days
-- Active goals
-- Average mood
-- Average energy
-- Focus hours
-- Focus sessions
-- Active focus days
-- Longest session
-- English practice minutes
-- Quick update count
-- AI response count
-- Distraction updates
-- Recovery/low-energy moments
-- Small wins
-- AI weekly insight
-- Milestones
-
-### Settings
-
-The Settings page includes:
-
-- Profile identity
-- Editable name
-- Wake-up time
-- College start and end time
-- Study window
-- Sleep time
-- Companion notification status
-- Privacy and local-first data explanation
-- Backup export placeholder
-
-## Local Database
-
-RiseUp uses Isar collections for local storage.
-
-Main stored entities include:
-
-- UserProfile
-- Goal
-- FocusSession
-- MoodLog
-- DailyCheckIn
-- Reflection
-- EnglishPracticeSpeakingLog
-- AIConversation
-- Message
-- ActivityLog
-- NotificationHistory
-- Achievement
-- WeeklyReview
-
-## App Architecture
-
-The project follows a feature-first Flutter architecture.
+## 🗂️ Architecture
 
 ```text
 lib/
-  core/
-    companion/
-    database/
-    network/
-    notifications/
-    router/
-    theme/
-  features/
-    ai_chat/
-    companion/
-    dashboard/
-    goals/
-    journal/
-    onboarding/
-    progress/
-    settings/
-    wellness/
+├── core/          # database, notifications, routing, theme, networking
+└── features/      # dashboard, goals, habits, progress, settings, chat, journal
 ```
 
-Each feature generally contains:
+The codebase follows a feature-first structure. Features keep their own models, repositories, state providers, and UI screens together.
 
-- models
-- providers
-- repositories
-- ui/screens
-- ui/widgets where needed
-
-## Navigation
-
-GoRouter is used for navigation.
-
-Main routes:
-
-- `/home`
-- `/onboarding`
-- `/check-in`
-- `/quick-update`
-- `/ai-chat`
-- `/journal`
-- `/progress`
-- `/settings`
-- `/focus-timer`
-- `/goal-creation`
-
-The Home screen uses bottom navigation for:
-
-- Home
-- Chat
-- Journal
-- Progress
-- Settings
-
-## AI Behavior
-
-RiseUp AI should behave like:
-
-- Caring friend
-- Personal mentor
-- Accountability partner
-- Confidence coach
-
-The AI should:
-
-- Never shame the user
-- Never guilt the user
-- Encourage recovery
-- Celebrate small wins
-- Promote healthy sleep
-- Promote realistic focus
-- Suggest small next actions
-
-Example:
-
-```text
-User: I spent 20 minutes scrolling Instagram.
-
-RiseUp: Looks like you needed a break. No shame.
-Would a quick 10-minute English practice feel manageable before returning?
-```
-
-## Running The App
-
-Install dependencies:
+## 🚀 Run locally
 
 ```bash
+git clone https://github.com/MAHAVEER-IT/RiseUp.git
+cd RiseUp
 flutter pub get
-```
-
-Run on a connected device:
-
-```bash
 flutter run
 ```
 
-Run tests:
+### Useful commands
 
 ```bash
+# Validate the project
+flutter analyze
 flutter test
-```
 
-Build debug APK:
-
-```bash
+# Build a debug Android APK
 flutter build apk --debug
 ```
 
-## Android Notes
+## ✅ Quality checks
 
-The app uses local notifications and scheduled alarms.
+The test suite includes persistence coverage for the To-Do database lifecycle: save, reopen, update, and delete without affecting unrelated records.
 
-Android manifest includes permissions for:
+## 🌱 Product philosophy
 
-- `POST_NOTIFICATIONS`
-- `RECEIVE_BOOT_COMPLETED`
-- `SCHEDULE_EXACT_ALARM`
+> You are not behind.<br />
+> You are building.<br />
+> One small step still counts.
 
-Scheduled notifications use exact scheduling when available and fall back to inexact scheduling if needed.
-
-## Environment
-
-The project expects Gemini API configuration to be available locally. Do not commit real API keys.
-
-The `.env` file is intentionally local and should remain private.
-
-## Current Status
-
-RiseUp is ready for personal daily use and testing.
-
-It is not yet public-release ready. Before publishing, the app still needs:
-
-- Stronger onboarding completion flow
-- Proper production migration strategy for Isar schema changes
-- More robust error handling
-- Real backup/export implementation
-- Notification fatigue tracking
-- Companion mode UI
-- More tests around repositories and providers
-- Final app branding and app icon polish
-
-## Product Philosophy
-
-RiseUp is not about perfection.
-
-It is about helping the user recover, continue, and see proof that small efforts are becoming real growth.
-
-The app should always feel like:
-
-```text
-You are not behind.
-You are building.
-One small step still counts.
-```
+<div align="center">
+  <sub>Crafted with care by Mahaveer 💚</sub>
+</div>
