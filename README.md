@@ -48,6 +48,7 @@ RiseUp is **local-first**.
 
 - Your profile, to-dos, progress, and reflections are stored on your device.
 - There is no Firebase backend and no required cloud account.
+- Optional Gemini AI features send only the context needed to generate chat replies or weekly insights. Read the full [Privacy Policy](docs/privacy-policy.html).
 - Clearing the app's data or uninstalling the app permanently removes its locally stored data.
 - Keep API keys out of source control; the local `.env` file is intentionally private.
 
