@@ -187,11 +187,8 @@ class ProgressSummary {
 
   int get proofScore {
     var score = 0;
-    score += checkInDays * 8;
-    score += activeFocusDays * 10;
-    score += reflectionDays * 8;
-    score += englishLogs.length * 6;
-    score += quickUpdates * 3;
+    score += totalCompletedTodos * 12;
+    score += activeFocusDays * 12;
     score += achievements.length * 10;
     return score.clamp(0, 100);
   }
@@ -205,14 +202,14 @@ class ProgressSummary {
 
   String get companionMessage {
     if (proofScore >= 75) {
-      return 'You are stacking check-ins, focus, and reflection. This is consistency in motion.';
+      return 'You are stacking completed tasks and consistency. This is momentum in motion.';
     }
     if (proofScore >= 45) {
-      return 'The page is picking up your effort. Keep feeding it small honest updates.';
+      return 'The page is picking up your effort. Keep completing your daily to-dos.';
     }
     if (proofScore > 0) {
-      return 'You have started leaving proof. One more check-in or focus session will make it clearer.';
+      return 'You have started leaving proof. One more completed to-do will build your momentum.';
     }
-    return 'Complete a check-in, focus session, or reflection and this page will begin telling your story.';
+    return 'Complete your daily to-dos and this page will begin telling your story.';
   }
 }

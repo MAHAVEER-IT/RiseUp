@@ -56,8 +56,9 @@ class WeeklyReviewCheckerNotifier extends AsyncNotifier<void> {
   }
 
   Future<void> forceGenerateReview() async {
+    state = const AsyncValue.loading();
     final service = ref.read(weeklyReviewGenerationServiceProvider);
-    await AsyncValue.guard(() => service.generateAndSaveWeeklyReview());
+    state = await AsyncValue.guard(() => service.generateAndSaveWeeklyReview());
   }
 }
 

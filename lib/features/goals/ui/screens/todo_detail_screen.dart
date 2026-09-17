@@ -16,8 +16,8 @@ class TodoDetailScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4ED),
       appBar: AppBar(
-        title: const Text('To-Do Detail'),
-        centerTitle: true,
+        title: const Text('Your next step'),
+        titleSpacing: 8,
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -87,47 +87,70 @@ class TodoDetailScreen extends ConsumerWidget {
             final todo = todos[todoIndex];
 
             return Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Card Header
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF416F5E), Color(0xFF244C40)],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF315044).withValues(alpha: 0.05),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
+                          color: const Color(0xFF244C40).withValues(alpha: 0.26),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
                         ),
                       ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'YOUR COMMITMENT',
+                            style: TextStyle(
+                              color: Color(0xFFDDECE5),
+                              fontSize: 10,
+                              letterSpacing: 1.1,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         Text(
                           todo.title,
                           style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF20332F),
+                            fontSize: 26,
+                            height: 1.12,
+                            letterSpacing: -0.45,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
                           ),
                         ),
                         if (todo.dueTime != null) ...[
                           const SizedBox(height: 10),
                           Row(
                             children: [
-                              const Icon(Icons.access_time_rounded, size: 16, color: Color(0xFF4D8C76)),
+                              const Icon(Icons.notifications_active_rounded, size: 16, color: Color(0xFFC9E5D7)),
                               const SizedBox(width: 6),
                               Text(
-                                'Scheduled at ${TimeOfDay.fromDateTime(todo.dueTime!).format(context)}',
+                                'Reminder at ${TimeOfDay.fromDateTime(todo.dueTime!).format(context)}',
                                 style: const TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF4D8C76),
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDDECE5),
                                 ),
                               ),
                             ],
@@ -136,47 +159,64 @@ class TodoDetailScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // Subtasks header
                   const Text(
-                    'Sub-tasks Progress',
+                    'Break it into steps',
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
                       color: Color(0xFF20332F),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 5),
+                  Text(
+                    todo.subTodos.isEmpty
+                        ? 'This task is ready whenever you are.'
+                        : '${todo.subTodos.where((sub) => sub.isCompleted).length} of ${todo.subTodos.length} steps complete',
+                    style: const TextStyle(color: Color(0xFF71827B), fontSize: 13),
+                  ),
+                  const SizedBox(height: 13),
 
                   // Subtasks lists
                   Expanded(
                     child: todo.subTodos.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No sub-tasks added.',
-                              style: TextStyle(color: Color(0xFF65706B), fontSize: 15),
+                        ? Container(
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.all(30),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.82),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFDFE8E2)),
+                            ),
+                            child: const Text(
+                              'No smaller steps needed —\nthis one is beautifully clear.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Color(0xFF65706B), fontSize: 15, height: 1.45),
                             ),
                           )
                         : Container(
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              color: Colors.white.withValues(alpha: 0.88),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFDFE8E2)),
                             ),
                             child: ListView.separated(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(vertical: 9),
                               itemCount: todo.subTodos.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                              separatorBuilder: (_, __) => const Divider(height: 1, indent: 22, endIndent: 22),
                               itemBuilder: (context, index) {
                                 final sub = todo.subTodos[index];
                                 return CheckboxListTile(
                                   value: sub.isCompleted,
-                                  activeColor: const Color(0xFF4D8C76),
+                                  activeColor: const Color(0xFF3E7965),
+                                  controlAffinity: ListTileControlAffinity.leading,
                                   title: Text(
                                     sub.title ?? '',
                                     style: TextStyle(
                                       fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w700,
                                       color: sub.isCompleted ? const Color(0xFF8A9590) : const Color(0xFF20332F),
                                       decoration: sub.isCompleted ? TextDecoration.lineThrough : null,
                                     ),
@@ -190,23 +230,36 @@ class TodoDetailScreen extends ConsumerWidget {
                           ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
                   // Finish task button
-                  FilledButton.icon(
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF315B4D).withValues(alpha: 0.22),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: FilledButton.icon(
                     onPressed: () async {
                       await ref.read(activeTodosProvider.notifier).toggleTodo(todo.id);
                       if (context.mounted) {
                         context.pop();
                       }
                     },
-                    icon: const Icon(Icons.check_circle_outline_rounded),
-                    label: const Text('Complete To-Do'),
+                    icon: const Icon(Icons.check_circle_rounded),
+                    label: const Text('Complete to-do'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF4D8C76),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      backgroundColor: const Color(0xFF315F50),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                     ),
+                  ),
                   ),
                 ],
               ),

@@ -8,7 +8,13 @@ class GeminiService {
     _model = GenerativeModel(model: 'gemini-3.6-flash', apiKey: apiKey);
   }
 
+  bool get _isConfigured => apiKey.trim().isNotEmpty;
+
+  static const String _configurationMessage =
+      'AI features are not configured in this build. Please contact support.';
+
   Future<String> prompt(String context, String userMessage) async {
+    if (!_isConfigured) return _configurationMessage;
     try {
       final content = [Content.text(context + '\n\nUser: ' + userMessage)];
 
@@ -25,6 +31,7 @@ class GeminiService {
     required List<String> history,
     required String userMessage,
   }) async {
+    if (!_isConfigured) return _configurationMessage;
     try {
       final historyContent = history.isNotEmpty
           ? 'Recent Chat History:\n' + history.join('\n') + '\n\n'
@@ -85,6 +92,7 @@ Core Values:
   }
 
   Future<String> generateWeeklyInsights(String weeklyData) async {
+    if (!_isConfigured) return _configurationMessage;
     try {
       final systemPrompt = '''
 You are RiseUp, a compassionate AI coach analyzing someone's week of personal growth.

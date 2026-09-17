@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class AppTheme {
@@ -21,6 +22,23 @@ class AppTheme {
         color: Color(0xFF2D3130),
         fontSize: 20,
         fontWeight: FontWeight.w600,
+      ),
+    ),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      },
+    ),
+    splashFactory: InkSparkle.splashFactory,
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        // A finite width is essential for buttons placed in a Row, such as
+        // the Progress page's insight action.
+        minimumSize: const Size(64, 52),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
       ),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(

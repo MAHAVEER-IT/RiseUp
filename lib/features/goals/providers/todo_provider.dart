@@ -56,12 +56,26 @@ class ActiveTodosNotifier extends AsyncNotifier<List<Todo>> {
   }
 
   Future<void> toggleTodo(int id) async {
-    await ref.read(todoRepositoryProvider).toggleTodo(id);
+    final repository = ref.read(todoRepositoryProvider);
+    await repository.toggleTodo(id);
+    final todo = await repository.getTodoById(id);
+    if (todo?.isCompleted ?? false) {
+      await NotificationService.cancelTodoNotification(id);
+    } else if (todo != null) {
+      await NotificationService.scheduleTodoNotification(todo);
+    }
     state = await AsyncValue.guard(() => build());
   }
 
   Future<void> toggleSubTodo(int id, int subIndex) async {
-    await ref.read(todoRepositoryProvider).toggleSubTodo(id, subIndex);
+    final repository = ref.read(todoRepositoryProvider);
+    await repository.toggleSubTodo(id, subIndex);
+    final todo = await repository.getTodoById(id);
+    if (todo?.isCompleted ?? false) {
+      await NotificationService.cancelTodoNotification(id);
+    } else if (todo != null) {
+      await NotificationService.scheduleTodoNotification(todo);
+    }
     state = await AsyncValue.guard(() => build());
   }
 

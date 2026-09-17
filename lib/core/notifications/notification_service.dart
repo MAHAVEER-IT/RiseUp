@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -7,6 +6,7 @@ import 'package:riseup/core/router/app_router.dart';
 import 'package:riseup/features/companion/models/companion_mode.dart';
 import 'package:riseup/features/companion/models/time_window_config.dart';
 import 'package:riseup/features/goals/models/todo.dart';
+import 'package:riseup/features/habit_tracker/models/habit_tracker.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -46,9 +46,12 @@ class NotificationService {
 
   static const int _companionNotificationStartId = 5000;
   static const int _companionNotificationEndId = 5099;
-  static const int _reflectionNotificationId = 6100;
+  // Kept solely to cancel the daily reflection alarm registered by older app
+  // versions. Reflection reminders are no longer scheduled.
+  static const int _legacyReflectionNotificationId = 6100;
   static const int _weeklyReviewNotificationId = 6200;
-  static const int _moodReminderNotificationId = 6300;
+  static const int _habitReminderStartId = 6300;
+  static const int _habitReminderEndId = 6665;
   static const int _achievementNotificationId = 7000;
 
   static String? _pendingPayload;
@@ -132,8 +135,27 @@ class NotificationService {
     final granted = await requestPermissions();
     if (!granted) return false;
 
+    // Android 12+ requires this separate special-access permission for alarms
+    // that must fire at the selected minute while the app is not running.
+    await requestExactAlarmPermission();
+
     await scheduleMvpNotificationPlan(mode: mode);
     return true;
+  }
+
+  static Future<void> requestExactAlarmPermission() async {
+    final androidImplementation = _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+
+    if (androidImplementation == null) return;
+
+    final canScheduleExactly =
+        await androidImplementation.canScheduleExactNotifications() ?? true;
+    if (!canScheduleExactly) {
+      await androidImplementation.requestExactAlarmsPermission();
+    }
   }
 
   static Future<NotificationHealth> getHealth() async {
@@ -226,24 +248,6 @@ class NotificationService {
     await cancelCompanionCheckIns();
   }
 
-  static Future<void> scheduleReflectionReminder({
-    int hour = 21,
-    int minute = 30,
-  }) async {
-    final scheduledTime = _nextTime(hour: hour, minute: minute);
-    await _scheduleAt(
-      id: _reflectionNotificationId,
-      title: 'A Moment of Peace 🌸❤️',
-      body: 'What was today\'s small win? Even the smallest step is a victory. Rest well. 💕',
-      scheduledTime: scheduledTime,
-      payload: reflectionPayload,
-      channelId: _reflectionChannelId,
-      channelName: 'RiseUp Reflection',
-      channelDescription: 'Daily reflection reminders from RiseUp',
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
-  }
-
   static Future<void> scheduleWeeklyReview({
     int hour = 18,
     int minute = 0,
@@ -267,9 +271,24 @@ class NotificationService {
     );
   }
 
-  static Future<void> scheduleHabitTrackerReminder() async {
-    final scheduledTime = _nextTime(hour: 22, minute: 0);
-    
+  /// Schedule only the remaining days of the active tracker. These are
+  /// one-time alarms rather than an endless daily recurrence, which ensures
+  /// reminders stop by themselves when the tracker's duration ends.
+  static Future<void> syncHabitTrackerReminders(
+    Iterable<HabitTracker> trackers,
+  ) async {
+    await init();
+    await _cancelHabitTrackerReminders();
+
+    HabitTracker? activeTracker;
+    for (final tracker in trackers) {
+      if (tracker.isActive) {
+        activeTracker = tracker;
+        break;
+      }
+    }
+    if (activeTracker == null) return;
+
     final titles = [
       'Daily Habit check-in 🌺',
       'Reflect on your promises 💕',
@@ -281,39 +300,57 @@ class NotificationService {
       'Take a gentle moment to record your habits. You are doing great! 💕',
     ];
     
-    final random = math.Random();
-    final title = titles[random.nextInt(titles.length)];
-    final body = bodies[random.nextInt(bodies.length)];
-
-    await _scheduleAt(
-      id: _moodReminderNotificationId,
-      title: title,
-      body: body,
-      scheduledTime: scheduledTime,
-      payload: 'habit-tracker',
-      channelId: _reflectionChannelId,
-      channelName: 'RiseUp Reflection',
-      channelDescription: 'Habit tracker reminders from RiseUp',
-      matchDateTimeComponents: DateTimeComponents.time,
+    final now = DateTime.now();
+    final start = DateTime(
+      activeTracker.createdAt.year,
+      activeTracker.createdAt.month,
+      activeTracker.createdAt.day,
     );
+
+    for (var day = 0; day < activeTracker.totalDays; day++) {
+      final scheduledTime = start.add(Duration(days: day, hours: 21, minutes: 30));
+      if (!scheduledTime.isAfter(now)) continue;
+
+      await _scheduleAt(
+        id: _habitReminderStartId + day,
+        title: titles[day % titles.length],
+        body: bodies[day % bodies.length],
+        scheduledTime: scheduledTime,
+        payload: 'habit-tracker',
+        channelId: _reflectionChannelId,
+        channelName: 'RiseUp Reflection',
+        channelDescription: 'Habit tracker reminders from RiseUp',
+      );
+    }
+  }
+
+  static Future<void> _cancelHabitTrackerReminders() async {
+    for (var id = _habitReminderStartId; id <= _habitReminderEndId; id++) {
+      await _notificationsPlugin.cancel(id: id);
+    }
   }
 
   static Future<void> scheduleTodoNotification(Todo todo) async {
-    if (todo.dueTime == null) return;
+    // A to-do can be saved before the delayed app-start notification setup has
+    // completed. Initialise here as well so the alarm is always registered
+    // with Android, rather than only while the Flutter process is alive.
+    await init();
+
+    if (todo.isCompleted || todo.dueTime == null) return;
     final scheduledTime = todo.dueTime!;
     if (scheduledTime.isBefore(DateTime.now())) return;
 
     final lovingTitles = [
       'Time for "${todo.title}" ❤️',
-      'You\'ve got this! 💖',
-      'Gentle reminder 🌸',
-      'A moment for you 🌹',
+      'You\'ve got this — ${todo.title} 💖',
+      'Gentle reminder: ${todo.title} 🌸',
+      'A moment for ${todo.title} 🌹',
     ];
     final lovingBodies = [
-      'Taking one small step is a beautiful act of self-care. Let\'s do this together. 💕',
-      'Remember to breathe and take it easy. You are doing amazing. 🌷',
+      'Taking one small step on "${todo.title}" is a beautiful act of self-care. Let\'s do this together. 💕',
+      'Remember to breathe and take "${todo.title}" one step at a time. You are doing amazing. 🌷',
       'Your time for "${todo.title}" is here. Take a moment, and step forward with love. 🌺',
-      'Every small action counts. I\'m right here cheering for you! ❤️',
+      'Every small action on "${todo.title}" counts. I\'m right here cheering for you! ❤️',
     ];
     
     final index = todo.id % lovingTitles.length;
@@ -333,14 +370,25 @@ class NotificationService {
   }
 
   static Future<void> cancelTodoNotification(int todoId) async {
+    await init();
     await _notificationsPlugin.cancel(id: todoId);
+  }
+
+  /// Re-register persisted alarms after an app update or device restart.
+  /// Android retains scheduled alarms while the app is closed; this is an
+  /// additional repair step if the operating system has cleared one.
+  static Future<void> restoreTodoNotifications(Iterable<Todo> todos) async {
+    await init();
+    for (final todo in todos) {
+      await scheduleTodoNotification(todo);
+    }
   }
 
   static Future<void> scheduleMvpNotificationPlan({
     CompanionMode mode = CompanionMode.balanced,
   }) async {
-    await scheduleHabitTrackerReminder();
-    await scheduleReflectionReminder();
+    // Remove any 9:30 PM daily reflection alarm left by a previous version.
+    await _notificationsPlugin.cancel(id: _legacyReflectionNotificationId);
     await scheduleWeeklyReview();
   }
 

@@ -20,7 +20,7 @@ class UserProfileRepository {
     var profile = await getUserProfile();
     if (profile == null) {
       profile = UserProfile()
-        ..name = 'User'
+        ..name = ''
         ..wakeTime = DateTime(2000, 1, 1, 6, 0)
         ..sleepTime = DateTime(2000, 1, 1, 23, 0)
         ..collegeStartTime = DateTime(2000, 1, 1, 8, 45)

@@ -27,8 +27,8 @@ class WeeklyReviewGenerationService {
   Future<bool> shouldGenerateReview() async {
     // Check if we already generated a review this week
     final now = DateTime.now();
-    final weekStartDate = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 7)); // Start of current week
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final weekStartDate = startOfDay.subtract(Duration(days: now.weekday - 1));
     
     final existing = await _progressRepository.getWeeklyReviewForDate(weekStartDate);
     return existing == null;
@@ -36,41 +36,31 @@ class WeeklyReviewGenerationService {
 
   Future<void> generateAndSaveWeeklyReview() async {
     try {
-      // Collect data from the past 7 days
-      final reflections = await _journalRepository.getReflectionsForLastDays(7);
-      final moodLogs = await _wellnessRepository.getMoodLogsForLastDays(7);
       final completedTasksCount = await _todoRepository.getCompletedTodosCountLastDays(7);
-
-      // Calculate average energy
-      int totalEnergy = 0;
-      for (final log in moodLogs) {
-        totalEnergy += log.energyScore;
-      }
-      final avgEnergy = moodLogs.isNotEmpty ? (totalEnergy / moodLogs.length).toStringAsFixed(1) : "N/A";
 
       // Build prompt for Gemini
       final dataContext = _buildWeeklyReviewContext(
-        reflections: reflections,
-        moodCount: moodLogs.length,
-        avgEnergy: avgEnergy,
         completedTasks: completedTasksCount,
       );
 
       // Send to Gemini for synthesis
       final aiInsights = await _geminiService.generateWeeklyInsights(dataContext);
 
-      // Save the review
-      final weekStart = DateTime.now()
-          .subtract(Duration(days: DateTime.now().weekday - 1));
+      // Save or update the review for current week
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final weekStart = startOfDay.subtract(Duration(days: now.weekday - 1));
       
-      final avgEnergyDouble = double.tryParse(avgEnergy) ?? 0.0;
-      
+      final existing = await _progressRepository.getWeeklyReviewForDate(weekStart);
       final review = WeeklyReview(
         weekStartDate: weekStart,
         aiInsights: aiInsights,
-        avgEnergy: avgEnergyDouble,
+        avgEnergy: 0.0,
         totalFocusMinutes: completedTasksCount, // Re-use totalFocusMinutes to hold completed tasks count
       );
+      if (existing != null) {
+        review.id = existing.id;
+      }
 
       await _progressRepository.saveWeeklyReview(review);
     } catch (e) {
@@ -80,28 +70,15 @@ class WeeklyReviewGenerationService {
   }
 
   String _buildWeeklyReviewContext({
-    required List reflections,
-    required int moodCount,
-    required String avgEnergy,
     required int completedTasks,
   }) {
     final buffer = StringBuffer();
     
     buffer.writeln('Weekly Review Data:');
-    buffer.writeln('- Reflections logged: ${reflections.length}');
-    buffer.writeln('- Average energy level: $avgEnergy/5');
     buffer.writeln('- Total tasks completed: $completedTasks');
-    buffer.writeln('- Mood check-ins: $moodCount');
-    
-    if (reflections.isNotEmpty) {
-      buffer.writeln('\nKey Reflections:');
-      for (final reflection in reflections.take(3)) {
-        buffer.writeln('- Small win: ${reflection.smallWin}');
-      }
-    }
     
     buffer.writeln('\nProvide a compassionate, motivating summary of the week.');
-    buffer.writeln('Highlight: progress made, energy patterns, consistency with completing tasks.');
+    buffer.writeln('Highlight: progress made, consistency with completing tasks, and daily victories.');
     buffer.writeln('Suggest: one actionable improvement for next week.');
     buffer.writeln('Tone: Like a supportive accountability partner, never shaming.');
     buffer.writeln(

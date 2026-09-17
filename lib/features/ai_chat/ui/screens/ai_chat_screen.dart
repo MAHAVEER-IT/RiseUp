@@ -6,9 +6,7 @@ import 'package:riseup/core/network/gemini_provider.dart';
 import 'package:riseup/features/ai_chat/models/message.dart';
 import 'package:riseup/features/ai_chat/providers/chat_provider.dart';
 import 'package:riseup/features/settings/providers/user_profile_provider.dart';
-import 'package:riseup/features/wellness/providers/wellness_provider.dart';
 import 'package:riseup/features/goals/providers/todo_provider.dart';
-import 'package:riseup/features/journal/providers/journal_provider.dart';
 
 class AIChatScreen extends ConsumerStatefulWidget {
   const AIChatScreen({Key? key}) : super(key: key);
@@ -81,28 +79,24 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
     try {
       final gemini = ref.read(geminiServiceProvider);
       final profile = ref.read(userProfileProvider).value;
-      final checkIn = ref.read(todayCheckInProvider).value;
       final activeTodosList = ref.read(activeTodosProvider).value ?? [];
-      final reflections = ref.read(journalProvider).value ?? [];
 
-      final userName = profile?.name ?? 'MAHAVEER';
-      final moodScore = checkIn?.moodScore ?? 3;
-      final energyScore = checkIn?.energyScore ?? 3;
+      final userName = (profile != null &&
+              profile.name.trim().isNotEmpty &&
+              profile.name.trim() != 'User')
+          ? profile.name.trim()
+          : 'Friend';
 
       final activeGoalsText = activeTodosList.isNotEmpty
           ? activeTodosList.map((t) => '- ${t.title} (${t.subTodos.length} subtasks)').join(', ')
           : 'None set yet today.';
 
-      final recentWinsText = reflections.isNotEmpty
-          ? reflections.map((r) => r.smallWin).where((w) => w.trim().isNotEmpty).take(3).join(', ')
-          : 'None recorded recently.';
-
       final systemContext = await gemini.buildContext(
         userName: userName,
-        currentMood: moodScore,
-        currentEnergy: energyScore,
+        currentMood: 4,
+        currentEnergy: 4,
         activeGoals: activeGoalsText,
-        recentWins: recentWinsText,
+        recentWins: 'Consistent focus on promises and daily tasks.',
       );
 
       final response = await gemini.promptChat(

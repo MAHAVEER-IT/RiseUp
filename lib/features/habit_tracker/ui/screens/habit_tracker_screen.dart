@@ -490,31 +490,36 @@ class _HabitTrackerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progressText = '${tracker.completedCount}/${tracker.totalDays} days';
+    final percentage = (tracker.progress * 100).round();
+    final today = tracker.maxUnlockedDay;
+    final primaryGreen = const Color(0xFF234B3D);
+    final emeraldGreen = tracker.isComplete
+        ? const Color(0xFF2E7D5F)
+        : const Color(0xFF3F8A70);
+    final mintGreen = const Color(0xFF5DB38A);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: _GlassPanel(
+      child: _TrackerCardSurface(
+        accent: emeraldGreen,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 46,
-                  height: 46,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: tracker.isComplete
-                        ? const Color(0xFF4D8C76).withValues(alpha: 0.15)
-                        : const Color(0xFFE99572).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
+                    color: emeraldGreen.withValues(alpha: 0.13),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: mintGreen.withValues(alpha: 0.3)),
                   ),
                   child: Icon(
                     tracker.isComplete
                         ? Icons.verified_rounded
                         : Icons.local_fire_department_rounded,
-                    color: tracker.isComplete
-                        ? const Color(0xFF4D8C76)
-                        : const Color(0xFFE99572),
+                    color: emeraldGreen,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -535,101 +540,198 @@ class _HabitTrackerCard extends StatelessWidget {
                         progressText,
                         style: const TextStyle(
                           color: Color(0xFF69756F),
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Delete tracker',
-                  onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  color: const Color(0xFF8E5D50),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.95),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFE0E5DC),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF24463B).withValues(alpha: 0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: PopupMenuButton<String>(
+                    tooltip: 'Tracker options',
+                    padding: EdgeInsets.zero,
+                    iconSize: 20,
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: Color(0xFF234B3D),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'delete') onDelete();
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              color: Color(0xFFD32F2F),
+                              size: 20,
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Delete tracker',
+                              style: TextStyle(
+                                color: Color(0xFFD32F2F),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Text(
+                  'YOUR PROGRESS',
+                  style: TextStyle(
+                    color: Color(0xFF6A746F),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.9,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$percentage%',
+                  style: TextStyle(
+                    color: emeraldGreen,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             ClipRRect(
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(99),
               child: LinearProgressIndicator(
                 value: tracker.progress,
-                minHeight: 10,
-                backgroundColor: const Color(0xFFE4E9E2),
-                color: tracker.isComplete
-                    ? const Color(0xFF4D8C76)
-                    : const Color(0xFFE99572),
+                minHeight: 8,
+                backgroundColor: const Color(0xFFE2EBE5),
+                color: emeraldGreen,
               ),
             ),
+            const SizedBox(height: 18),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF7F6F0).withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE4E1D8)),
+                color: const Color(0xFFF8F8F4).withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE5E8E1)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.grid_view_rounded,
-                        size: 13,
-                        color: const Color(0xFF69756F).withValues(alpha: 0.8),
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: mintGreen.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          tracker.isComplete
+                              ? Icons.emoji_events_rounded
+                              : Icons.calendar_month_rounded,
+                          size: 14,
+                          color: primaryGreen,
+                        ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       const Text(
-                        'PROMISE MATRIX',
+                        'YOUR QUIT JOURNEY',
                         style: TextStyle(
-                          fontSize: 10,
-                          letterSpacing: 0.8,
+                          fontSize: 11,
+                          letterSpacing: 0.7,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF69756F),
                         ),
                       ),
+                      const Spacer(),
+                      if (!tracker.isComplete)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: emeraldGreen.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Day $today',
+                            style: TextStyle(
+                              color: primaryGreen,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final columns = constraints.maxWidth > 500 ? 7 : 5;
-                      return GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: tracker.totalDays,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: columns,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
-                        ),
-                        itemBuilder: (context, index) {
-                          final day = index + 1;
-                          return _DayBox(
-                            day: day,
-                            isCompleted: tracker.completedDays.contains(day),
-                            isUnlocked: day <= tracker.maxUnlockedDay,
-                            onTap: () => onToggleDay(day),
-                          );
-                        },
+                  const SizedBox(height: 14),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: tracker.totalDays,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      mainAxisSpacing: 9,
+                      crossAxisSpacing: 9,
+                    ),
+                    itemBuilder: (context, index) {
+                      final day = index + 1;
+                      return _DayBox(
+                        day: day,
+                        isCompleted: tracker.completedDays.contains(day),
+                        isUnlocked: day <= tracker.maxUnlockedDay,
+                        onTap: () => onToggleDay(day),
                       );
                     },
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  const SizedBox(height: 14),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    runSpacing: 6,
+                    spacing: 12,
                     children: [
                       _LegendItem(
                         color: const Color(0xFF4D8C76),
-                        label: 'Completed',
+                        label: 'Done (Locked)',
                       ),
-                      const SizedBox(width: 12),
                       _LegendItem(
                         color: Colors.white,
-                        label: 'Available',
+                        label: 'Tap to mark',
                         border: Border.all(color: const Color(0xFFE4E1D8)),
                       ),
-                      const SizedBox(width: 12),
                       _LegendItem(
                         color: const Color(0xFFE4E2DC).withValues(alpha: 0.72),
                         label: 'Locked',
@@ -641,6 +743,95 @@ class _HabitTrackerCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TrackerCardSurface extends StatelessWidget {
+  const _TrackerCardSurface({required this.accent, required this.child});
+
+  final Color accent;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.96),
+            const Color(0xFFF5F8F2).withValues(alpha: 0.94),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF24463B).withValues(alpha: 0.12),
+            blurRadius: 30,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -6,
+            right: -6,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: 0.55,
+                child: Image.asset(
+                  'images/flower_corner.png',
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: -72,
+            right: -58,
+            child: Container(
+              width: 190,
+              height: 190,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF64B692).withValues(alpha: 0.18),
+                    const Color(0xFF3F8A70).withValues(alpha: 0.08),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 5,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF234B3D),
+                    Color(0xFF3F8A70),
+                    Color(0xFF64B692),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(padding: const EdgeInsets.all(20), child: child),
+        ],
       ),
     );
   }
@@ -712,16 +903,16 @@ class _DayBoxState extends State<_DayBox> with SingleTickerProviderStateMixin {
     super.initState();
     _celebrationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 600),
     );
     _scaleAnimation = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 1.25).chain(CurveTween(curve: Curves.easeOut)),
-        weight: 30,
+        tween: Tween(begin: 1.0, end: 1.32).chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 35,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 1.25, end: 1.0).chain(CurveTween(curve: Curves.bounceOut)),
-        weight: 70,
+        tween: Tween(begin: 1.32, end: 1.0).chain(CurveTween(curve: Curves.bounceOut)),
+        weight: 65,
       ),
     ]).animate(_celebrationController);
   }
@@ -773,56 +964,102 @@ class _DayBoxState extends State<_DayBox> with SingleTickerProviderStateMixin {
           ),
         );
       },
-      child: Material(
-        color: background,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: widget.isUnlocked ? widget.onTap : null,
-          borderRadius: BorderRadius.circular(8),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: widget.isCompleted
-                    ? const Color(0xFF3B705D)
-                    : Colors.white.withValues(alpha: 0.86),
-              ),
-              boxShadow: widget.isCompleted
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF4D8C76).withValues(alpha: 0.22),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: widget.isCompleted
+                ? const Color(0xFF3B705D)
+                : Colors.white.withValues(alpha: 0.86),
+            width: widget.isCompleted ? 1.5 : 1.0,
+          ),
+          boxShadow: widget.isCompleted
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF4D8C76).withValues(alpha: 0.22),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.isCompleted
+                ? () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Day ${widget.day} is checked and locked! 🔒 Keep it up!',
+                        ),
+                        duration: const Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
                       ),
-                    ]
-                  : null,
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Text(
-                  '${widget.day}',
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
+                    );
+                  }
+                : widget.isUnlocked
+                    ? widget.onTap
+                    : () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Day ${widget.day} unlocks on Day ${widget.day} ⏳',
+                            ),
+                            duration: const Duration(seconds: 1),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
+            child: SizedBox.expand(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Center(
+                    child: Text(
+                      '${widget.day}',
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
-                if (widget.isCompleted)
-                  const Icon(
-                    Icons.close_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                if (!widget.isUnlocked)
-                  Icon(
-                    Icons.lock_rounded,
-                    color: foreground.withValues(alpha: 0.52),
-                    size: 18,
-                  ),
-              ],
+                  if (widget.isCompleted)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          color: Color(0xFF4D8C76),
+                          size: 13,
+                        ),
+                      ),
+                    ),
+                  if (!widget.isUnlocked)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Icon(
+                        Icons.lock_rounded,
+                        color: foreground.withValues(alpha: 0.55),
+                        size: 14,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -838,44 +1075,75 @@ class _BoxConfettiPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (progress == 0.0 || progress == 1.0) return;
+    if (progress <= 0.0 || progress >= 1.0) return;
 
     final center = Offset(size.width / 2, size.height / 2);
-    final random = math.Random(42);
+    final random = math.Random(77);
 
     final colors = [
-      const Color(0xFFFFC107),
-      const Color(0xFFFF5722),
-      const Color(0xFF4D8C76),
-      const Color(0xFF00BCD4),
-      const Color(0xFFE91E63),
-      const Color(0xFF9C27B0),
+      const Color(0xFF4D8C76), // emerald
+      const Color(0xFFFFB300), // amber
+      const Color(0xFFFF6F00), // coral
+      const Color(0xFF29B6F6), // light blue
+      const Color(0xFFEC407A), // pink
+      const Color(0xFF26A69A), // teal
+      const Color(0xFFAB47BC), // purple
+      const Color(0xFF66BB6A), // light green
     ];
 
-    final paint = Paint()..style = PaintingStyle.fill;
+    final fillPaint = Paint()..style = PaintingStyle.fill;
+    final strokePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4;
+    final highlightPaint = Paint()..style = PaintingStyle.fill;
 
-    for (int i = 0; i < 8; i++) {
-      final angle = (i * math.pi / 4) + (random.nextDouble() * 0.4 - 0.2);
-      final maxDistance = 24.0 + random.nextDouble() * 16.0;
-      final distance = maxDistance * progress;
+    const particleCount = 14;
+    final fade = (1.0 - progress).clamp(0.0, 1.0);
+
+    for (int i = 0; i < particleCount; i++) {
+      final baseAngle = (i * 2 * math.pi / particleCount);
+      final angle = baseAngle + (random.nextDouble() * 0.35 - 0.175);
+
+      // Much larger outward blast radius (50 to 95px from center)
+      final maxDistance = 50.0 + (random.nextDouble() * 42.0);
+      final distance = maxDistance * math.sin(progress * math.pi / 2);
+
       final x = center.dx + math.cos(angle) * distance;
       final y = center.dy + math.sin(angle) * distance;
 
-      final color = colors[random.nextInt(colors.length)];
-      paint.color = color.withOpacity(1.0 - progress);
+      final color = colors[i % colors.length];
+      fillPaint.color = color.withValues(alpha: fade * 0.92);
+      strokePaint.color = color.withValues(alpha: fade * 0.85);
+      highlightPaint.color = Colors.white.withValues(alpha: fade * 0.82);
 
-      final size = (4.0 * (1.0 - progress)).clamp(1.0, 5.0);
+      // Much larger bubble size (radius 7.5 to 15.0px, diameter 15 to 30px)
+      final baseRadius = 7.5 + (random.nextDouble() * 7.5);
+      final bubbleRadius =
+          (baseRadius * (1.1 - (progress * 0.4))).clamp(3.5, 16.0);
 
-      if (i % 2 == 0) {
-        canvas.drawCircle(Offset(x, y), size, paint);
-      } else {
+      if (i % 4 == 0) {
+        // Soap ring bubble
+        canvas.drawCircle(Offset(x, y), bubbleRadius, strokePaint);
+        canvas.drawCircle(Offset(x, y), bubbleRadius * 0.28, highlightPaint);
+      } else if (i % 4 == 2) {
+        // Sparkle diamond star
+        final sparkleSize = bubbleRadius * 1.15;
         final path = Path()
-          ..moveTo(x - size, y)
-          ..lineTo(x, y - size)
-          ..lineTo(x + size, y)
-          ..lineTo(x, y + size)
+          ..moveTo(x, y - sparkleSize)
+          ..quadraticBezierTo(x, y, x + sparkleSize, y)
+          ..quadraticBezierTo(x, y, x, y + sparkleSize)
+          ..quadraticBezierTo(x, y, x - sparkleSize, y)
+          ..quadraticBezierTo(x, y, x, y - sparkleSize)
           ..close();
-        canvas.drawPath(path, paint);
+        canvas.drawPath(path, fillPaint);
+      } else {
+        // Full glossy celebration bubble with specular gleam
+        canvas.drawCircle(Offset(x, y), bubbleRadius, fillPaint);
+        canvas.drawCircle(
+          Offset(x - (bubbleRadius * 0.32), y - (bubbleRadius * 0.32)),
+          (bubbleRadius * 0.32).clamp(1.5, 5.0),
+          highlightPaint,
+        );
       }
     }
   }

@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riseup/features/goals/models/todo.dart';
 import 'package:riseup/features/goals/providers/todo_provider.dart';
-import 'package:riseup/features/wellness/providers/wellness_provider.dart';
+import 'package:riseup/features/settings/models/user_profile.dart';
+import 'package:riseup/features/settings/providers/user_profile_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -16,7 +17,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with TickerProviderStateMixin {
-  static const String _userName = 'MAHAVEER';
+  bool _hasPromptedName = false;
 
   late final AnimationController _motionController;
   late final AnimationController _introController;
@@ -31,7 +32,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     )..repeat(reverse: true);
     _introController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 720),
+      duration: const Duration(milliseconds: 700),
     )..forward();
     _introAnimation = CurvedAnimation(
       parent: _introController,
@@ -41,25 +42,62 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   void dispose() {
-    _introController.dispose();
     _motionController.dispose();
+    _introController.dispose();
     super.dispose();
   }
 
-  String _getEnergyText(int energyScore) {
-    switch (energyScore) {
-      case 1:
-        return 'Very Low';
-      case 2:
-        return 'Low';
-      case 3:
-        return 'Normal';
-      case 4:
-        return 'High';
-      case 5:
-        return 'Excellent';
-      default:
-        return 'Normal';
+  void _checkAndPromptName(UserProfile profile) {
+    if (_hasPromptedName) return;
+    final name = profile.name.trim();
+    if (name.isEmpty || name == 'User') {
+      _hasPromptedName = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showNameDialog(context, profile);
+        }
+      });
+    }
+  }
+
+  Future<void> _showNameDialog(BuildContext context, UserProfile profile) async {
+    final initialName = (profile.name.trim() == 'User') ? '' : profile.name;
+    final isExistingCustom =
+        profile.name.trim().isNotEmpty && profile.name.trim() != 'User';
+
+    final result = await showGeneralDialog<String>(
+      context: context,
+      barrierDismissible: isExistingCustom,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      transitionDuration: const Duration(milliseconds: 340),
+      transitionBuilder: (context, anim, secondaryAnim, child) {
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return ScaleTransition(
+          scale: Tween<double>(begin: 0.88, end: 1.0).animate(curved),
+          child: FadeTransition(opacity: curved, child: child),
+        );
+      },
+      pageBuilder: (context, _, __) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+        child: _NameEntryDialog(
+          initialName: initialName,
+          isExistingCustom: isExistingCustom,
+        ),
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      profile.name = result;
+      await ref.read(userProfileProvider.notifier).updateProfile(profile);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Welcome, $result! ✨')),
+        );
+      }
     }
   }
 
@@ -73,34 +111,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    final checkInState = ref.watch(todayCheckInProvider);
     final todosState = ref.watch(activeTodosProvider);
+    final userProfileState = ref.watch(userProfileProvider);
+    userProfileState.whenData((profile) => _checkAndPromptName(profile));
+
+    final profile = userProfileState.value;
+    final userName = (profile != null &&
+            profile.name.trim().isNotEmpty &&
+            profile.name.trim() != 'User')
+        ? profile.name.trim()
+        : 'Friend';
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: const Color(0xFFF7F4ED),
       appBar: AppBar(
-        title: const Text('RiseUp'),
+        title: const _RiseUpWordmark(),
+        titleSpacing: 20,
         centerTitle: false,
         backgroundColor: Colors.transparent,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
-              ),
-              child: IconButton(
-                tooltip: 'Quick update',
-                icon: const Icon(Icons.bolt_rounded),
-                color: const Color(0xFF1F3D36),
-                onPressed: () => context.push('/quick-update'),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Stack(
         children: [
@@ -132,37 +161,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         builder: (context, _) {
                           return _HeroPanel(
                             greeting: _getGreeting(),
-                            userName: _userName,
+                            userName: userName,
                             progress: _motionController.value,
                             onStartGoal: () => context.push('/todo-creation'),
                             onChat: () => context.push('/ai-chat'),
                             onHabitTracker: () =>
                                 context.push('/habit-tracker'),
+                            onEditName: profile != null
+                                ? () => _showNameDialog(context, profile)
+                                : null,
                           );
                         },
-                      ),
-                      const SizedBox(height: 18),
-                      checkInState.when(
-                        data: (checkIn) {
-                          if (!checkIn.morningCompleted) {
-                            return _CheckInPromptCard(
-                              onPressed: () => context.push('/check-in'),
-                            );
-                          }
-
-                          return _EnergyCard(
-                            energyText: _getEnergyText(
-                              checkIn.energyScore,
-                            ),
-                            energyScore: checkIn.energyScore,
-                          );
-                        },
-                        loading: () => const _LoadingCard(),
-                        error: (e, _) => const _MessageCard(
-                          icon: Icons.warning_amber_rounded,
-                          title: 'Could not load check-in',
-                          message: 'Try again in a moment.',
-                        ),
                       ),
                       const SizedBox(height: 18),
                       _ResetCard(onPressed: () => context.push('/ai-chat')),
@@ -247,6 +256,76 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 }
 
+class _RiseUpWordmark extends StatelessWidget {
+  const _RiseUpWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF6CA68D), Color(0xFF244C40)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF315B4D).withValues(alpha: 0.22),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.auto_awesome_rounded,
+            size: 18,
+            color: Color(0xFFFFF9EF),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Color(0xFF183A30), Color(0xFF5C927A)],
+              ).createShader(bounds),
+              child: const Text(
+                'RiseUp',
+                style: TextStyle(
+                  fontSize: 25,
+                  height: 0.95,
+                  letterSpacing: -1.1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 3),
+            const Text(
+              'QUIET MOMENTUM',
+              style: TextStyle(
+                color: Color(0xFF759087),
+                fontSize: 8,
+                height: 1,
+                letterSpacing: 1.45,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _HeroPanel extends StatelessWidget {
   const _HeroPanel({
     required this.greeting,
@@ -255,6 +334,7 @@ class _HeroPanel extends StatelessWidget {
     required this.onStartGoal,
     required this.onChat,
     required this.onHabitTracker,
+    this.onEditName,
   });
 
   final String greeting;
@@ -263,6 +343,7 @@ class _HeroPanel extends StatelessWidget {
   final VoidCallback onStartGoal;
   final VoidCallback onChat;
   final VoidCallback onHabitTracker;
+  final VoidCallback? onEditName;
 
   @override
   Widget build(BuildContext context) {
@@ -355,13 +436,36 @@ class _HeroPanel extends StatelessWidget {
                     ],
                   ).createShader(bounds);
                 },
-                child: Text(
-                  '$greeting,\n$userName.',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    height: 1.04,
+                child: InkWell(
+                  onTap: onEditName,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '$greeting,\n$userName.',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 34,
+                            fontWeight: FontWeight.w900,
+                            height: 1.04,
+                          ),
+                        ),
+                      ),
+                      if (onEditName != null) ...[
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Icon(
+                            Icons.edit_rounded,
+                            size: 18,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -385,13 +489,15 @@ class _HeroPanel extends StatelessWidget {
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF25463C),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
+                        horizontal: 14,
                         vertical: 13,
                       ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     onPressed: onStartGoal,
                     icon: const Icon(Icons.checklist_rounded, size: 18),
-                    label: const Text('New To-Do'),
+                    label: const Text('To-Do'),
                   ),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -426,111 +532,6 @@ class _HeroPanel extends StatelessWidget {
                 ],
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CheckInPromptCard extends StatelessWidget {
-  const _CheckInPromptCard({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassCard(
-      child: Row(
-        children: [
-          const _IconBadge(
-            icon: Icons.wb_sunny_rounded,
-            color: Color(0xFFE99572),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Quick check-in',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  'Mood and energy first, then the next step becomes clearer.',
-                  style: TextStyle(color: Color(0xFF65706B), height: 1.35),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          IconButton.filled(
-            tooltip: 'Start check-in',
-            onPressed: onPressed,
-            icon: const Icon(Icons.arrow_forward_rounded),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EnergyCard extends StatelessWidget {
-  const _EnergyCard({required this.energyText, required this.energyScore});
-
-  final String energyText;
-  final int energyScore;
-
-  @override
-  Widget build(BuildContext context) {
-    final normalized = energyScore.clamp(1, 5) / 5;
-
-    return _GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _IconBadge(
-                icon: Icons.battery_charging_full_rounded,
-                color: Color(0xFF4D8C76),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Your Energy: $energyText',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF243C36),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: normalized,
-              minHeight: 10,
-              backgroundColor: const Color(0xFFE4E9E2),
-              color: energyScore < 3
-                  ? const Color(0xFFE99572)
-                  : const Color(0xFF4D8C76),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            energyScore < 3
-                ? 'Keep today light. Try one 5-minute easy win, then rest without guilt.'
-                : 'You have solid energy. A 30-minute focus session would be a strong next step.',
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.42,
-              color: Color(0xFF4C5753),
-            ),
           ),
         ],
       ),
@@ -600,76 +601,170 @@ class _TodoTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final completedSubCount = todo.subTodos.where((s) => s.isCompleted).length;
     final totalSubCount = todo.subTodos.length;
+    final progress = totalSubCount == 0
+        ? 0.0
+        : completedSubCount / totalSubCount;
+    final reminderColor = todo.dueTime == null
+        ? const Color(0xFF5B7C70)
+        : const Color(0xFFE28A52);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Material(
-        color: Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Checkbox(
-                  value: todo.isCompleted,
-                  activeColor: const Color(0xFF4D8C76),
-                  onChanged: (val) {
-                    ref.read(activeTodosProvider.notifier).toggleTodo(todo.id);
-                  },
+          borderRadius: BorderRadius.circular(18),
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(14, 14, 13, 13),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFDEE8E2)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF315B4D).withValues(alpha: 0.07),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
                 ),
-                const SizedBox(width: 8),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkResponse(
+                  onTap: () =>
+                      ref.read(activeTodosProvider.notifier).toggleTodo(todo.id),
+                  radius: 26,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: todo.isCompleted
+                          ? const Color(0xFF4D8C76)
+                          : const Color(0xFFE9F2ED),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(
+                      todo.isCompleted
+                          ? Icons.check_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      color: todo.isCompleted
+                          ? Colors.white
+                          : const Color(0xFF4D8C76),
+                      size: 21,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 13),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         todo.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: todo.isCompleted ? const Color(0xFF8A9590) : const Color(0xFF243C36),
-                          decoration: todo.isCompleted ? TextDecoration.lineThrough : null,
+                          height: 1.2,
+                          fontWeight: FontWeight.w900,
+                          color: todo.isCompleted
+                              ? const Color(0xFF8A9590)
+                              : const Color(0xFF243C36),
+                          decoration: todo.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 6,
                         children: [
-                          if (todo.dueTime != null) ...[
-                            const Icon(Icons.access_time_rounded, size: 13, color: Color(0xFF4D8C76)),
-                            const SizedBox(width: 4),
-                            Text(
-                              TimeOfDay.fromDateTime(todo.dueTime!).format(context),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF4D8C76),
-                              ),
+                          if (todo.dueTime != null)
+                            _TodoDetailPill(
+                              icon: Icons.notifications_active_rounded,
+                              label: TimeOfDay.fromDateTime(
+                                todo.dueTime!,
+                              ).format(context),
+                              color: reminderColor,
                             ),
-                            if (totalSubCount > 0) const Text('  •  ', style: TextStyle(color: Color(0xFF65706B))),
-                          ],
                           if (totalSubCount > 0)
-                            Text(
-                              '$completedSubCount of $totalSubCount subtasks',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF65706B),
-                              ),
+                            _TodoDetailPill(
+                              icon: Icons.checklist_rounded,
+                              label: '$completedSubCount / $totalSubCount steps',
+                              color: const Color(0xFF5B7C70),
                             ),
                         ],
                       ),
+                      if (totalSubCount > 0) ...[
+                        const SizedBox(height: 11),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 5,
+                            color: const Color(0xFF4D8C76),
+                            backgroundColor: const Color(0xFFE5EEE8),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Icon(Icons.chevron_right_rounded, size: 22, color: Color(0xFF65706B)),
+                const SizedBox(width: 8),
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: Color(0xFF6C877C),
+                  ),
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TodoDetailPill extends StatelessWidget {
+  const _TodoDetailPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -860,5 +955,313 @@ class _HomeBackdropPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _HomeBackdropPainter oldDelegate) {
     return oldDelegate.progress != progress;
+  }
+}
+
+class _NameEntryDialog extends StatefulWidget {
+  const _NameEntryDialog({
+    required this.initialName,
+    required this.isExistingCustom,
+  });
+
+  final String initialName;
+  final bool isExistingCustom;
+
+  @override
+  State<_NameEntryDialog> createState() => _NameEntryDialogState();
+}
+
+class _NameEntryDialogState extends State<_NameEntryDialog>
+    with SingleTickerProviderStateMixin {
+  late final TextEditingController _controller;
+  late final AnimationController _ambientController;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+    _ambientController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _ambientController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter a name to continue';
+      });
+      return;
+    }
+    Navigator.of(context).pop(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ambientController,
+      builder: (context, _) {
+        final progress = _ambientController.value;
+        final shimmer = Alignment.lerp(
+          const Alignment(-1.1, -1),
+          const Alignment(1.1, 1),
+          progress,
+        )!;
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: const [
+                Color(0xFF25463C),
+                Color(0xFF6F9E88),
+                Color(0xFFF0B08D),
+              ],
+              stops: [0, 0.58 + (progress * 0.08), 1],
+            ),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF25463C).withValues(alpha: 0.35),
+                blurRadius: 36,
+                offset: const Offset(0, 18),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              Positioned(
+                right: -24 + (progress * 18),
+                top: -22,
+                child: Container(
+                  width: 118,
+                  height: 118,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.14),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 28,
+                bottom: -32 + (math.sin(progress * math.pi) * 14),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 96,
+                  color: Colors.white.withValues(alpha: 0.14),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(26),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.24),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            widget.isExistingCustom
+                                ? 'Personalize RiseUp'
+                                : 'Welcome to RiseUp 🌸',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    ShaderMask(
+                      shaderCallback: (bounds) {
+                        return LinearGradient(
+                          begin: shimmer,
+                          end: Alignment.bottomRight,
+                          colors: const [
+                            Colors.white,
+                            Color(0xFFFFE4C9),
+                            Colors.white,
+                          ],
+                        ).createShader(bounds);
+                      },
+                      child: Text(
+                        widget.isExistingCustom
+                            ? 'What should we\ncall you?'
+                            : 'Start your journey,\nwhat\'s your name?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      widget.isExistingCustom
+                          ? 'Update your name to customize daily greetings and conversations.'
+                          : 'Pick one steady step. Let RiseUp adapt seamlessly to your daily pace.',
+                      style: const TextStyle(
+                        color: Color(0xFFEAF4EF),
+                        fontSize: 14,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _errorMessage != null
+                              ? const Color(0xFFFFB3B3)
+                              : Colors.white.withValues(alpha: 0.35),
+                          width: 1.4,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 2,
+                      ),
+                      child: TextField(
+                        controller: _controller,
+                        autofocus: true,
+                        textCapitalization: TextCapitalization.words,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        cursorColor: Colors.white,
+                        onChanged: (_) {
+                          if (_errorMessage != null) {
+                            setState(() {
+                              _errorMessage = null;
+                            });
+                          }
+                        },
+                        decoration: InputDecoration(
+                          icon: Icon(
+                            Icons.person_outline_rounded,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            size: 22,
+                          ),
+                          hintText: 'Your name...',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.55),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          border: InputBorder.none,
+                        ),
+                        onSubmitted: (_) => _submit(),
+                      ),
+                    ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(
+                          color: Color(0xFFFFC0C0),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        if (widget.isExistingCustom) ...[
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.64),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 13,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF25463C),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: _submit,
+                            icon: const Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 18,
+                            ),
+                            label: Text(
+                              widget.isExistingCustom
+                                  ? 'Save'
+                                  : 'Continue',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

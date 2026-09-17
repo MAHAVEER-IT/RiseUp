@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riseup/core/notifications/notification_service.dart';
 import 'package:riseup/features/habit_tracker/models/habit_tracker.dart';
 import 'package:riseup/features/habit_tracker/repositories/habit_tracker_repository.dart';
 
@@ -19,7 +20,7 @@ class HabitTrackersNotifier extends AsyncNotifier<List<HabitTracker>> {
 
   Future<void> createTracker(String name, int totalDays) async {
     final current = state.valueOrNull ?? await build();
-    if (current.any((tracker) => !tracker.isComplete)) return;
+    if (current.any((tracker) => tracker.isActive)) return;
 
     final tracker = HabitTracker(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -30,6 +31,7 @@ class HabitTrackersNotifier extends AsyncNotifier<List<HabitTracker>> {
     );
     final updated = [tracker, ...current];
     await ref.read(habitTrackerRepositoryProvider).saveTrackers(updated);
+    await NotificationService.syncHabitTrackerReminders(updated);
     state = AsyncValue.data(updated);
   }
 
@@ -39,17 +41,15 @@ class HabitTrackersNotifier extends AsyncNotifier<List<HabitTracker>> {
       if (tracker.id != trackerId) return tracker;
       if (day > tracker.maxUnlockedDay) return tracker;
 
-      final completedDays = Set<int>.from(tracker.completedDays);
-      if (completedDays.contains(day)) {
-        completedDays.remove(day);
-      } else {
-        completedDays.add(day);
-      }
+      // Completed days are locked and cannot be unchecked
+      if (tracker.completedDays.contains(day)) return tracker;
 
+      final completedDays = Set<int>.from(tracker.completedDays)..add(day);
       return tracker.copyWith(completedDays: completedDays);
     }).toList();
 
     await ref.read(habitTrackerRepositoryProvider).saveTrackers(updated);
+    await NotificationService.syncHabitTrackerReminders(updated);
     state = AsyncValue.data(updated);
   }
 
@@ -59,6 +59,7 @@ class HabitTrackersNotifier extends AsyncNotifier<List<HabitTracker>> {
         .where((tracker) => tracker.id != trackerId)
         .toList();
     await ref.read(habitTrackerRepositoryProvider).saveTrackers(updated);
+    await NotificationService.syncHabitTrackerReminders(updated);
     state = AsyncValue.data(updated);
   }
 }

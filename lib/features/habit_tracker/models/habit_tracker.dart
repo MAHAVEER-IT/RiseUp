@@ -19,6 +19,19 @@ class HabitTracker {
 
   bool get isComplete => completedCount >= totalDays;
 
+  /// A tracker is active through its final calendar day. It expires even when
+  /// the user has not checked every day off, so it cannot keep prompting them
+  /// after the commitment they chose has ended.
+  bool get hasEnded {
+    final start = DateTime(createdAt.year, createdAt.month, createdAt.day);
+    final finalDay = start.add(Duration(days: totalDays - 1));
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return today.isAfter(finalDay);
+  }
+
+  bool get isActive => !isComplete && !hasEnded;
+
   int get maxUnlockedDay {
     final daysSinceStart = DateTime.now()
         .difference(DateTime(createdAt.year, createdAt.month, createdAt.day))

@@ -124,8 +124,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           ),
                           const SizedBox(height: 22),
                           const _CompanionSection(),
-                          const SizedBox(height: 22),
-                          _PrivacySection(profile: profile),
+                          const SizedBox(height: 28),
+                          const _DeviceDataNotice(),
+                          const SizedBox(height: 36),
+                          const Center(
+                            child: Text(
+                              'Crafted by Mahaveer 💚',
+                              style: TextStyle(
+                                color: Color(0xFF5B7C70),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.15,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                         ],
                       ),
                     ),
@@ -349,6 +362,57 @@ class _ProfileHero extends StatelessWidget {
     if (parts.length == 1) return parts.first.characters.first.toUpperCase();
     return '${parts.first.characters.first}${parts.last.characters.first}'
         .toUpperCase();
+  }
+}
+
+class _DeviceDataNotice extends StatelessWidget {
+  const _DeviceDataNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF3ED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFCFE0D5)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.phone_android_rounded,
+            size: 20,
+            color: Color(0xFF3E7965),
+          ),
+          SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your data stays on this phone',
+                  style: TextStyle(
+                    color: Color(0xFF25463C),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'For your privacy, RiseUp stores your information locally. Important: deleting the app or clearing its app data permanently erases your saved data.',
+                  style: TextStyle(
+                    color: Color(0xFF5D7168),
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -637,6 +701,16 @@ class _CompanionSection extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       _NotificationStatusRow(
+                        icon: Icons.alarm_rounded,
+                        label: health.exactAlarmsEnabled
+                            ? 'Exact reminder timing enabled'
+                            : 'Allow exact alarms for on-time reminders',
+                        color: health.exactAlarmsEnabled
+                            ? const Color(0xFF4D8C76)
+                            : const Color(0xFFE07165),
+                      ),
+                      const SizedBox(height: 8),
+                      _NotificationStatusRow(
                         icon: Icons.schedule_rounded,
                         label:
                             '${health.pendingNotifications} reminders scheduled',
@@ -736,113 +810,6 @@ class _NotificationStatusRow extends StatelessWidget {
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PrivacySection extends StatelessWidget {
-  const _PrivacySection({required this.profile});
-
-  final UserProfile profile;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionTitle(
-          title: 'Privacy & Data',
-          subtitle: 'Your growth memory stays on this phone',
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          child: Column(
-            children: [
-              const _TrustRow(
-                icon: Icons.phone_android_rounded,
-                title: 'Local-first storage',
-                subtitle: 'Your profile, progress, and journal live locally.',
-                color: Color(0xFF4D8C76),
-              ),
-              const SizedBox(height: 14),
-              const _TrustRow(
-                icon: Icons.cloud_off_rounded,
-                title: 'No Firebase backend',
-                subtitle: 'RiseUp does not depend on a cloud account.',
-                color: Color(0xFF5A7FC8),
-              ),
-              const SizedBox(height: 14),
-              _TrustRow(
-                icon: Icons.update_rounded,
-                title: 'Last profile update',
-                subtitle: _friendlyDate(profile.lastUpdatedAt),
-                color: const Color(0xFFE99572),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Backup export is coming soon.'),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.download_rounded),
-                  label: const Text('Export Backup'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TrustRow extends StatelessWidget {
-  const _TrustRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _IconBadge(icon: icon, color: color),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF243C36),
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  color: Color(0xFF65706B),
-                  fontSize: 13,
-                ),
-              ),
-            ],
           ),
         ),
       ],

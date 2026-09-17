@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riseup/features/dashboard/ui/screens/dashboard_screen.dart';
 import 'package:riseup/features/ai_chat/ui/screens/ai_chat_screen.dart';
-import 'package:riseup/features/journal/ui/screens/journal_screen.dart';
 import 'package:riseup/features/progress/ui/screens/progress_screen.dart';
 import 'package:riseup/features/settings/ui/screens/settings_screen.dart';
 
@@ -19,7 +18,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final List<Widget> _pages = [
     const DashboardScreen(),
     const AIChatScreen(),
-    const JournalScreen(),
     const ProgressScreen(),
     const SettingsScreen(),
   ];
@@ -87,11 +85,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     icon: Icon(Icons.chat_bubble_outline_rounded),
                     selectedIcon: Icon(Icons.chat_bubble_rounded),
                     label: 'Chat',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.edit_note_outlined),
-                    selectedIcon: Icon(Icons.edit_note_rounded),
-                    label: 'Journal',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.trending_up_outlined),

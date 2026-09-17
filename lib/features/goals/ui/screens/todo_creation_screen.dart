@@ -13,13 +13,106 @@ class TodoCreationScreen extends ConsumerStatefulWidget {
   ConsumerState<TodoCreationScreen> createState() => _TodoCreationScreenState();
 }
 
+class _FormSectionLabel extends StatelessWidget {
+  const _FormSectionLabel({
+    required this.number,
+    required this.title,
+    this.subtitle,
+  });
+
+  final String number;
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 27,
+          height: 27,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF4D8C76).withValues(alpha: 0.13),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            number,
+            style: const TextStyle(
+              color: Color(0xFF39745F),
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF20332F),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (subtitle != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    subtitle!,
+                    style: const TextStyle(
+                      color: Color(0xFF71827B),
+                      fontSize: 12,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FormSurface extends StatelessWidget {
+  const _FormSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDFE8E2)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF315B4D).withValues(alpha: 0.07),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
 class _TodoCreationScreenState extends ConsumerState<TodoCreationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _subTaskController = TextEditingController();
-  
+
   TimeOfDay? _selectedTime;
   final List<SubTodo> _subTasks = [];
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -90,8 +183,10 @@ class _TodoCreationScreenState extends ConsumerState<TodoCreationScreen> {
     }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
 
     DateTime? dueDateTime;
     if (_selectedTime != null) {
@@ -103,24 +198,30 @@ class _TodoCreationScreenState extends ConsumerState<TodoCreationScreen> {
         _selectedTime!.hour,
         _selectedTime!.minute,
       );
+      // The picker contains a time, not a date. A time already passed today
+      // should mean the next occurrence, rather than silently skipping the
+      // reminder as an expired alarm.
+      if (!dueDateTime.isAfter(now)) {
+        dueDateTime = dueDateTime.add(const Duration(days: 1));
+      }
     }
 
     if (widget.todoId != null) {
-      ref.read(activeTodosProvider.notifier).updateTodo(
+      await ref.read(activeTodosProvider.notifier).updateTodo(
         id: widget.todoId!,
         title: _titleController.text.trim(),
         dueTime: dueDateTime,
         subTodos: _subTasks,
       );
     } else {
-      ref.read(activeTodosProvider.notifier).addTodo(
+      await ref.read(activeTodosProvider.notifier).addTodo(
         _titleController.text.trim(),
         dueDateTime,
         _subTasks.map((s) => s.title ?? '').toList(),
       );
     }
 
-    context.pop();
+    if (mounted) context.pop();
   }
 
   @override
@@ -131,201 +232,223 @@ class _TodoCreationScreenState extends ConsumerState<TodoCreationScreen> {
       backgroundColor: const Color(0xFFF7F4ED),
       appBar: AppBar(
         title: Text(isEditing ? 'Edit To-Do' : 'New To-Do'),
-        centerTitle: true,
+        titleSpacing: 8,
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 36),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  isEditing ? 'Modify your to-do details' : 'What would you like to accomplish?',
+                  isEditing
+                      ? 'Refine the next step that matters.'
+                      : 'Make one clear promise to yourself.',
                   style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 25,
+                    height: 1.14,
+                    letterSpacing: -0.5,
+                    fontWeight: FontWeight.w900,
                     color: Color(0xFF20332F),
                   ),
                 ),
-                const SizedBox(height: 24),
-                
-                // Title Field
-                TextFormField(
-                  controller: _titleController,
-                  decoration: InputDecoration(
-                    labelText: 'Task Title',
-                    hintText: 'e.g. Clean up the desk',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a task title';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Due Time selector
-                InkWell(
-                  onTap: _selectTime,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time_filled_rounded, color: Color(0xFF4D8C76)),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Scheduled Time (Optional)',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF65706B),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _selectedTime != null
-                                    ? _selectedTime!.format(context)
-                                    : 'Choose Time',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF20332F),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (_selectedTime != null)
-                          IconButton(
-                            icon: const Icon(Icons.clear_rounded, size: 18),
-                            onPressed: () {
-                              setState(() => _selectedTime = null);
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Sub-tasks Section
+                const SizedBox(height: 7),
                 const Text(
-                  'Sub-tasks',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF20332F),
+                  'Small, specific actions are easier to begin.',
+                  style: TextStyle(color: Color(0xFF65706B), height: 1.45),
+                ),
+                const SizedBox(height: 26),
+
+                // 1. Task
+                const _FormSectionLabel(number: '01', title: 'Your task'),
+                const SizedBox(height: 10),
+                _FormSurface(
+                  child: TextFormField(
+                    controller: _titleController,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF20332F),
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. Clean up the desk',
+                      prefixIcon: Icon(Icons.edit_note_rounded),
+                      border: InputBorder.none,
+                    ),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Please enter a task title'
+                        : null,
                   ),
                 ),
-                const SizedBox(height: 12),
-                
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _subTaskController,
-                        decoration: InputDecoration(
-                          hintText: 'Add a sub-task...',
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onFieldSubmitted: (_) => _addSubTask(),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4D8C76),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.add_rounded, color: Colors.white),
-                        onPressed: _addSubTask,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-                // Subtasks List
-                if (_subTasks.isNotEmpty)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _subTasks.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
-                      itemBuilder: (context, index) {
-                        final sub = _subTasks[index];
-                        return ListTile(
-                          leading: Icon(
-                            sub.isCompleted ? Icons.check_circle_outline_rounded : Icons.subdirectory_arrow_right_rounded,
-                            size: 18,
-                            color: sub.isCompleted ? const Color(0xFF4D8C76) : const Color(0xFF65706B),
-                          ),
-                          title: Text(
-                            sub.title ?? '',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: const Color(0xFF20332F),
-                              fontWeight: FontWeight.w600,
-                              decoration: sub.isCompleted ? TextDecoration.lineThrough : null,
+                // 2. Sub-tasks
+                const _FormSectionLabel(
+                  number: '02',
+                  title: 'Sub-tasks',
+                  subtitle: 'Optional — break the first step down.',
+                ),
+                const SizedBox(height: 10),
+                _FormSurface(
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _subTaskController,
+                              decoration: const InputDecoration(
+                                hintText: 'Add a small step',
+                                border: InputBorder.none,
+                              ),
+                              onFieldSubmitted: (_) => _addSubTask(),
                             ),
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                            onPressed: () => _removeSubTask(index),
+                          IconButton.filled(
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFF4D8C76),
+                            ),
+                            icon: const Icon(Icons.add_rounded),
+                            onPressed: _addSubTask,
                           ),
-                        );
-                      },
-                    ),
+                        ],
+                      ),
+                      if (_subTasks.isNotEmpty) ...[
+                        const Divider(height: 26),
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _subTasks.length,
+                          separatorBuilder: (_, __) => const Divider(height: 14),
+                          itemBuilder: (context, index) {
+                            final sub = _subTasks[index];
+                            return Row(
+                              children: [
+                                const Icon(Icons.arrow_right_rounded, color: Color(0xFF6E9486)),
+                                Expanded(
+                                  child: Text(
+                                    sub.title ?? '',
+                                    style: const TextStyle(
+                                      color: Color(0xFF20332F),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove sub-task',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.close_rounded, size: 18),
+                                  color: const Color(0xFF9A6B63),
+                                  onPressed: () => _removeSubTask(index),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ],
                   ),
-                
-                const SizedBox(height: 40),
+                ),
+                const SizedBox(height: 24),
 
-                // Submit Button
-                FilledButton(
-                  onPressed: _submit,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF4D8C76),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                // 3. Reminder
+                const _FormSectionLabel(
+                  number: '03',
+                  title: 'Reminder time',
+                  subtitle: 'Optional — a gentle nudge when it matters.',
+                ),
+                const SizedBox(height: 10),
+                _FormSurface(
+                  child: InkWell(
+                    onTap: _selectTime,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4D8C76).withValues(alpha: 0.13),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF3E7965)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _selectedTime?.format(context) ?? 'Choose a time',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF20332F),
+                              ),
+                            ),
+                          ),
+                          if (_selectedTime != null)
+                            IconButton(
+                              tooltip: 'Clear reminder',
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: () => setState(() => _selectedTime = null),
+                            )
+                          else
+                            const Icon(Icons.chevron_right_rounded, color: Color(0xFF7D928A)),
+                        ],
+                      ),
                     ),
                   ),
-                  child: Text(
-                    isEditing ? 'Save Changes' : 'Save To-Do',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                ),
+                const SizedBox(height: 30),
+
+                // 4. Save
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF315B4D).withValues(alpha: 0.23),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: _isSaving ? null : _submit,
+                    icon: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: _isSaving
+                          ? const SizedBox(
+                              key: ValueKey('saving'),
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.check_circle_rounded,
+                              key: ValueKey('ready'),
+                            ),
+                    ),
+                    label: Text(
+                      _isSaving
+                          ? 'Saving your step...'
+                          : isEditing
+                          ? 'Save changes'
+                          : 'Create to-do',
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF315F50),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                     ),
                   ),
                 ),

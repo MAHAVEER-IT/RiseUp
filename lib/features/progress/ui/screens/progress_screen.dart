@@ -20,6 +20,7 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen>
   late final AnimationController _ambientController;
   late final AnimationController _introController;
   late final Animation<double> _introAnimation;
+  bool _generationRequestedByUser = false;
 
   @override
   void initState() {
@@ -49,6 +50,31 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen>
   Widget build(BuildContext context) {
     final summaryState = ref.watch(progressSummaryProvider);
     final weeklyReviewState = ref.watch(weeklyReviewCheckerProvider);
+
+    ref.listen<AsyncValue<void>>(weeklyReviewCheckerProvider, (previous, next) {
+      if (_generationRequestedByUser && next.hasError && !next.isLoading) {
+        _generationRequestedByUser = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not generate insight: ${next.error}'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (_generationRequestedByUser &&
+          previous?.isLoading == true &&
+          !next.isLoading &&
+          !next.hasError) {
+        _generationRequestedByUser = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Weekly insight generated successfully!'),
+            backgroundColor: Color(0xFF25463C),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -108,14 +134,23 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen>
                               const SizedBox(height: 22),
                               _WeeklyFocusPanel(summary: summary),
                               const SizedBox(height: 22),
-                              _EnglishAndUpdatesPanel(summary: summary),
-                              const SizedBox(height: 22),
-                              _SmallWinsPanel(summary: summary),
-                              const SizedBox(height: 22),
                               _WeeklyInsightsPanel(
                                 reviews: summary.weeklyReviews,
                                 isGenerating: weeklyReviewState.isLoading,
+                                hasCompletedTasks: summary.totalCompletedTodos > 0,
                                 onGenerate: () async {
+                                  if (summary.totalCompletedTodos == 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Complete at least 1 task this week to unlock your AI insight.',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  _generationRequestedByUser = true;
                                   await ref
                                       .read(
                                         weeklyReviewCheckerProvider.notifier,
@@ -295,13 +330,6 @@ class _ProofSignals extends StatelessWidget {
   Widget build(BuildContext context) {
     final signals = [
       _SignalData(
-        icon: Icons.check_circle_rounded,
-        label: 'Check-ins',
-        value: '${summary.checkInDays}',
-        detail: 'days completed',
-        color: const Color(0xFF4D8C76),
-      ),
-      _SignalData(
         icon: Icons.checklist_rounded,
         label: 'Active To-Dos',
         value: '${summary.activeTodos.length}',
@@ -309,18 +337,11 @@ class _ProofSignals extends StatelessWidget {
         color: const Color(0xFF5A7FC8),
       ),
       _SignalData(
-        icon: Icons.mood_rounded,
-        label: 'Avg mood',
-        value: summary.averageMood?.toStringAsFixed(1) ?? '--',
-        detail: 'out of 5',
-        color: const Color(0xFFE99572),
-      ),
-      _SignalData(
-        icon: Icons.bolt_rounded,
-        label: 'Avg energy',
-        value: summary.averageEnergy?.toStringAsFixed(1) ?? '--',
-        detail: 'out of 5',
-        color: const Color(0xFFB8864B),
+        icon: Icons.check_circle_rounded,
+        label: 'Completed',
+        value: '${summary.totalCompletedTodos}',
+        detail: 'tasks done',
+        color: const Color(0xFF4D8C76),
       ),
     ];
 
@@ -568,13 +589,6 @@ class _RecentFocusList extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    _shortDate(todo.createdAt),
-                    style: const TextStyle(
-                      color: Color(0xFF65706B),
-                      fontSize: 12,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -584,182 +598,45 @@ class _RecentFocusList extends StatelessWidget {
   }
 }
 
-class _EnglishAndUpdatesPanel extends StatelessWidget {
-  const _EnglishAndUpdatesPanel({required this.summary});
-
-  final ProgressSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionTitle(
-          title: 'Companion Memory',
-          subtitle: 'English practice and quick updates',
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _MiniMetric(
-                      label: 'English min',
-                      value: '${summary.totalEnglishMinutes}',
-                      icon: Icons.record_voice_over_rounded,
-                      color: const Color(0xFFE99572),
-                    ),
-                  ),
-                  Expanded(
-                    child: _MiniMetric(
-                      label: 'Quick updates',
-                      value: '${summary.quickUpdates}',
-                      icon: Icons.forum_rounded,
-                      color: const Color(0xFF5A7FC8),
-                    ),
-                  ),
-                  Expanded(
-                    child: _MiniMetric(
-                      label: 'AI responses',
-                      value: '${summary.aiResponses}',
-                      icon: Icons.auto_awesome_rounded,
-                      color: const Color(0xFF4D8C76),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _MemoryLine(
-                icon: Icons.phone_android_rounded,
-                text:
-                    '${summary.distractionUpdates} distraction updates were logged.',
-              ),
-              const SizedBox(height: 8),
-              _MemoryLine(
-                icon: Icons.self_improvement_rounded,
-                text:
-                    '${summary.recoveryUpdates} recovery or low-energy moments were noticed.',
-              ),
-              if (summary.activities.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(13),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4D8C76).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Latest: ${_activityLabel(summary.activities.first.activity)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF243C36),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MemoryLine extends StatelessWidget {
-  const _MemoryLine({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: const Color(0xFF4D8C76)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(color: Color(0xFF65706B), height: 1.35),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SmallWinsPanel extends StatelessWidget {
-  const _SmallWinsPanel({required this.summary});
-
-  final ProgressSummary summary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionTitle(
-          title: 'Small Wins',
-          subtitle: 'Confidence proof from your reflections',
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          child: summary.smallWins.isEmpty
-              ? const Text(
-                  'No small wins recorded this week yet. Your next reflection can change that.',
-                  style: TextStyle(color: Color(0xFF65706B), height: 1.4),
-                )
-              : Column(
-                  children: [
-                    for (final win in summary.smallWins)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(
-                              Icons.check_circle_rounded,
-                              color: Color(0xFF4D8C76),
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                win,
-                                style: const TextStyle(
-                                  height: 1.35,
-                                  color: Color(0xFF243C36),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-}
-
 class _WeeklyInsightsPanel extends StatelessWidget {
   const _WeeklyInsightsPanel({
     required this.reviews,
     required this.isGenerating,
+    required this.hasCompletedTasks,
     required this.onGenerate,
   });
 
   final List<WeeklyReview> reviews;
   final bool isGenerating;
+  final bool hasCompletedTasks;
   final Future<void> Function() onGenerate;
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final hasReviewThisWeek = reviews.any((r) {
+      final diff = now.difference(r.weekStartDate).inDays;
+      return diff >= 0 && diff < 7;
+    });
+
+    final String buttonLabel;
+    final IconData buttonIconData;
+    final Color buttonColor;
+
+    if (!hasCompletedTasks) {
+      buttonLabel = 'Generate';
+      buttonIconData = Icons.lock_outline_rounded;
+      buttonColor = const Color(0xFF86928C);
+    } else if (hasReviewThisWeek) {
+      buttonLabel = 'Regenerate';
+      buttonIconData = Icons.refresh_rounded;
+      buttonColor = const Color(0xFF25463C);
+    } else {
+      buttonLabel = 'Generate';
+      buttonIconData = Icons.auto_awesome_rounded;
+      buttonColor = const Color(0xFF25463C);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -777,20 +654,22 @@ class _WeeklyInsightsPanel extends StatelessWidget {
                       color: Colors.white,
                     ),
                   )
-                : const Icon(Icons.auto_awesome_rounded, size: 18),
-            label: const Text('Generate'),
+                : Icon(buttonIconData, size: 18),
+            label: Text(buttonLabel),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF25463C),
+              backgroundColor: buttonColor,
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
           ),
         ),
         const SizedBox(height: 14),
         if (reviews.isEmpty)
-          const _GlassPanel(
+          _GlassPanel(
             child: Text(
-              'No weekly insight yet. Generate one after you have check-ins, focus sessions, or journal entries.',
-              style: TextStyle(color: Color(0xFF65706B), height: 1.4),
+              hasCompletedTasks
+                  ? 'Tap "Generate" to create your personalized AI coaching insight for this week.'
+                  : 'Complete at least 1 task from your daily list, then tap Generate to get your personalized AI coaching insight.',
+              style: const TextStyle(color: Color(0xFF65706B), height: 1.4),
             ),
           )
         else
@@ -921,29 +800,13 @@ class _MilestonesPanel extends StatelessWidget {
         const SizedBox(height: 14),
         _AchievementTile(
           icon: Icons.local_fire_department_rounded,
-          title: summary.activeFocusDays >= 5
+          iconColor: Color(0xFFF28C38),
+          title: summary.activeFocusDays >= 1
               ? 'Consistency unlocked'
               : 'Consistency',
-          subtitle: '${summary.activeFocusDays} active days this week',
-          isUnlocked: summary.activeFocusDays >= 5,
-        ),
-        const SizedBox(height: 10),
-        _AchievementTile(
-          icon: Icons.record_voice_over_rounded,
-          title: summary.totalEnglishMinutes >= 30
-              ? 'English practice done'
-              : 'English practice',
-          subtitle: '${summary.totalEnglishMinutes} English minutes logged',
-          isUnlocked: summary.totalEnglishMinutes >= 30,
-        ),
-        const SizedBox(height: 10),
-        _AchievementTile(
-          icon: Icons.nightlight_round,
-          title: summary.reflectionDays >= 3
-              ? 'Reflection habit building'
-              : 'Reflection habit',
-          subtitle: '${summary.reflectionDays} reflection days this week',
-          isUnlocked: summary.reflectionDays >= 3,
+          subtitle:
+              '${summary.activeFocusDays} ${summary.activeFocusDays == 1 ? 'active day' : 'active days'} this week',
+          isUnlocked: summary.activeFocusDays >= 1,
         ),
         if (summary.achievements.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -1010,16 +873,19 @@ class _AchievementTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.isUnlocked,
+    this.iconColor,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final bool isUnlocked;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
     final color = isUnlocked ? const Color(0xFF4D8C76) : const Color(0xFF9CA7A2);
+    final displayIconColor = iconColor ?? color;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1045,10 +911,12 @@ class _AchievementTile extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: isUnlocked ? 0.16 : 0.12),
+              color: displayIconColor.withValues(
+                alpha: isUnlocked ? 0.16 : 0.12,
+              ),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color),
+            child: Icon(icon, color: displayIconColor),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1215,10 +1083,6 @@ class _ProgressError extends StatelessWidget {
       ],
     );
   }
-}
-
-String _shortDate(DateTime date) {
-  return '${date.month}/${date.day}';
 }
 
 List<TextSpan> _boldSpans(
