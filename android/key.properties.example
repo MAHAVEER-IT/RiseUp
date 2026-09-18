@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties and replace every placeholder.
+# This file is safe to commit; android/key.properties and *.jks files are ignored.
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=riseup
+storeFile=upload-keystore.jks
