@@ -130,8 +130,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           const _CompanionSection(),
                           const SizedBox(height: 22),
                           const _AiSettingsSection(),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 22),
                           const _DeviceDataNotice(),
+                          const SizedBox(height: 14),
+                          const _PrivacyPolicyTile(),
                           const SizedBox(height: 36),
                           const Center(
                             child: Text(
@@ -384,28 +386,28 @@ class _DeviceDataNotice extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFCFE0D5)),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
+          const Icon(
             Icons.phone_android_rounded,
             size: 20,
             color: Color(0xFF3E7965),
           ),
-          SizedBox(width: 11),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Your data stays on this phone',
                   style: TextStyle(
                     color: Color(0xFF25463C),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                SizedBox(height: 4),
-                Text(
+                const SizedBox(height: 4),
+                const Text(
                   'For your privacy, RiseUp stores your information locally. Important: deleting the app or clearing its app data permanently erases your saved data.',
                   style: TextStyle(
                     color: Color(0xFF5D7168),
@@ -413,10 +415,137 @@ class _DeviceDataNotice extends StatelessWidget {
                     height: 1.4,
                   ),
                 ),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    final uri = Uri.parse(
+                      'https://mahaveer-it.github.io/RiseUp/privacy-policy.html',
+                    );
+                    try {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    } catch (_) {}
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Read Privacy Policy',
+                          style: TextStyle(
+                            color: Color(0xFF3E7965),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          Icons.open_in_new_rounded,
+                          size: 13,
+                          color: Color(0xFF3E7965),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PrivacyPolicyTile extends StatelessWidget {
+  const _PrivacyPolicyTile();
+
+  static final Uri _privacyPolicyUri = Uri.parse(
+    'https://mahaveer-it.github.io/RiseUp/privacy-policy.html',
+  );
+
+  Future<void> _openPrivacyPolicy() async {
+    try {
+      await launchUrl(
+        _privacyPolicyUri,
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _openPrivacyPolicy,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFF4D8C76).withValues(alpha: 0.22),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF315044).withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Color(0xFFE8F2EC),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.privacy_tip_outlined,
+                  size: 19,
+                  color: Color(0xFF25463C),
+                ),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Privacy Policy',
+                      style: TextStyle(
+                        color: Color(0xFF20332F),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Read how RiseUp protects your data',
+                      style: TextStyle(
+                        color: Color(0xFF65706B),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.open_in_new_rounded,
+                size: 16,
+                color: Color(0xFF4D8C76),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -960,10 +1089,6 @@ String _formatTime(DateTime value) {
   final period = hour >= 12 ? 'PM' : 'AM';
   final displayHour = hour % 12 == 0 ? 12 : hour % 12;
   return '$displayHour:$minute $period';
-}
-
-String _friendlyDate(DateTime value) {
-  return '${value.day}/${value.month}/${value.year}';
 }
 
 class _SettingsBackdropPainter extends CustomPainter {
