@@ -19,7 +19,7 @@ val hasReleaseSigning = keystorePropertiesFile.exists() &&
 
 android {
     
-    namespace = "com.example.riseup"
+    namespace = "com.mahaveer.riseup"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -31,8 +31,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.riseup"
+        applicationId = "com.mahaveer.riseup"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
