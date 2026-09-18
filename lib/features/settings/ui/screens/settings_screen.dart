@@ -499,23 +499,23 @@ class _PrivacyPolicyTile extends StatelessWidget {
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             children: [
               Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Color(0xFFE8F2EC),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.privacy_tip_outlined,
                   size: 19,
                   color: Color(0xFF25463C),
                 ),
               ),
-              SizedBox(width: 14),
-              Expanded(
+              const SizedBox(width: 14),
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -538,7 +538,7 @@ class _PrivacyPolicyTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.open_in_new_rounded,
                 size: 16,
                 color: Color(0xFF4D8C76),
