@@ -29,6 +29,8 @@ class ProgressSummary {
   final List<ActivityLog> activities;
   final List<Achievement> achievements;
   final List<WeeklyReview> weeklyReviews;
+  final int allTimeActiveDays;
+  final int allTimeCompletedTodos;
 
   const ProgressSummary({
     required this.startDate,
@@ -43,6 +45,8 @@ class ProgressSummary {
     required this.activities,
     required this.achievements,
     required this.weeklyReviews,
+    required this.allTimeActiveDays,
+    required this.allTimeCompletedTodos,
   });
 
   static Future<ProgressSummary> load({
@@ -105,6 +109,46 @@ class ProgressSummary {
         .sortByWeekStartDateDesc()
         .findAll();
 
+    final allCompletedTodos = await isar.todos
+        .filter()
+        .isCompletedEqualTo(true)
+        .findAll();
+
+    final allTimeActiveDates = allCompletedTodos
+        .map((t) => DateTime(
+              t.createdAt.year,
+              t.createdAt.month,
+              t.createdAt.day,
+            ))
+        .toSet();
+
+    final allCheckIns = await isar.dailyCheckIns
+        .filter()
+        .morningCompletedEqualTo(true)
+        .or()
+        .eveningCompletedEqualTo(true)
+        .findAll();
+
+    for (final c in allCheckIns) {
+      allTimeActiveDates.add(DateTime(c.date.year, c.date.month, c.date.day));
+    }
+
+    final allReflections = await isar.reflections.where().findAll();
+    for (final r in allReflections) {
+      allTimeActiveDates.add(DateTime(r.date.year, r.date.month, r.date.day));
+    }
+
+    final allEnglishLogs =
+        await isar.englishPracticeSpeakingLogs.where().findAll();
+    for (final log in allEnglishLogs) {
+      allTimeActiveDates.add(
+        DateTime(log.timestamp.year, log.timestamp.month, log.timestamp.day),
+      );
+    }
+
+    final allTimeActiveDays = allTimeActiveDates.length;
+    final allTimeCompletedTodos = allCompletedTodos.length;
+
     return ProgressSummary(
       startDate: start,
       endDate: end,
@@ -118,6 +162,8 @@ class ProgressSummary {
       activities: activities,
       achievements: achievements,
       weeklyReviews: weeklyReviews,
+      allTimeActiveDays: allTimeActiveDays,
+      allTimeCompletedTodos: allTimeCompletedTodos,
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riseup/core/network/gemini_provider.dart';
 import 'package:riseup/features/companion/models/activity_log.dart';
 import 'package:riseup/features/goals/models/todo.dart';
 import 'package:riseup/features/progress/models/weekly_review.dart';
@@ -54,9 +55,16 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen>
     ref.listen<AsyncValue<void>>(weeklyReviewCheckerProvider, (previous, next) {
       if (_generationRequestedByUser && next.hasError && !next.isLoading) {
         _generationRequestedByUser = false;
+        final errStr = next.error.toString();
+        final friendlyMsg = (errStr.contains('503') ||
+                errStr.contains('high demand') ||
+                errStr.contains('UNAVAILABLE') ||
+                errStr.contains('429'))
+            ? 'The AI model is currently in high demand. Please try again later.'
+            : 'An unexpected issue occurred while generating insights. Please try again later.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not generate insight: ${next.error}'),
+            content: Text(friendlyMsg),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
           ),
@@ -138,7 +146,20 @@ class _ProgressScreenState extends ConsumerState<ProgressScreen>
                                 reviews: summary.weeklyReviews,
                                 isGenerating: weeklyReviewState.isLoading,
                                 hasCompletedTasks: summary.totalCompletedTodos > 0,
+                                hasApiKey: ref.watch(hasGeminiKeyProvider),
                                 onGenerate: () async {
+                                  final hasKey = ref.read(hasGeminiKeyProvider);
+                                  if (!hasKey) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Set up your Gemini API key in Chat or Settings to generate AI insights.',
+                                        ),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    return;
+                                  }
                                   if (summary.totalCompletedTodos == 0) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -603,12 +624,14 @@ class _WeeklyInsightsPanel extends StatelessWidget {
     required this.reviews,
     required this.isGenerating,
     required this.hasCompletedTasks,
+    required this.hasApiKey,
     required this.onGenerate,
   });
 
   final List<WeeklyReview> reviews;
   final bool isGenerating;
   final bool hasCompletedTasks;
+  final bool hasApiKey;
   final Future<void> Function() onGenerate;
 
   @override
@@ -623,7 +646,11 @@ class _WeeklyInsightsPanel extends StatelessWidget {
     final IconData buttonIconData;
     final Color buttonColor;
 
-    if (!hasCompletedTasks) {
+    if (!hasApiKey) {
+      buttonLabel = 'Set Up AI';
+      buttonIconData = Icons.key_rounded;
+      buttonColor = const Color(0xFF4D8C76);
+    } else if (!hasCompletedTasks) {
       buttonLabel = 'Generate';
       buttonIconData = Icons.lock_outline_rounded;
       buttonColor = const Color(0xFF86928C);
@@ -666,9 +693,11 @@ class _WeeklyInsightsPanel extends StatelessWidget {
         if (reviews.isEmpty)
           _GlassPanel(
             child: Text(
-              hasCompletedTasks
-                  ? 'Tap "Generate" to create your personalized AI coaching insight for this week.'
-                  : 'Complete at least 1 task from your daily list, then tap Generate to get your personalized AI coaching insight.',
+              !hasApiKey
+                  ? 'Set up your free Google Gemini API key in Chat or Settings to unlock AI weekly coaching.'
+                  : (hasCompletedTasks
+                      ? 'Tap "Generate" to create your personalized AI coaching insight for this week.'
+                      : 'Complete at least 1 task from your daily list, then tap Generate to get your personalized AI coaching insight.'),
               style: const TextStyle(color: Color(0xFF65706B), height: 1.4),
             ),
           )
@@ -790,6 +819,9 @@ class _MilestonesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final totalDays = summary.allTimeActiveDays;
+    final isUnlocked = totalDays >= 1;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -800,13 +832,14 @@ class _MilestonesPanel extends StatelessWidget {
         const SizedBox(height: 14),
         _AchievementTile(
           icon: Icons.local_fire_department_rounded,
-          iconColor: Color(0xFFF28C38),
-          title: summary.activeFocusDays >= 1
+          iconColor: const Color(0xFFF28C38),
+          title: isUnlocked
               ? 'Consistency unlocked'
               : 'Consistency',
-          subtitle:
-              '${summary.activeFocusDays} ${summary.activeFocusDays == 1 ? 'active day' : 'active days'} this week',
-          isUnlocked: summary.activeFocusDays >= 1,
+          subtitle: isUnlocked
+              ? '$totalDays ${totalDays == 1 ? 'active day' : 'active days'} total'
+              : 'Complete tasks to build consistency',
+          isUnlocked: isUnlocked,
         ),
         if (summary.achievements.isNotEmpty) ...[
           const SizedBox(height: 10),

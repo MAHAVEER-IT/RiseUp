@@ -1,29 +1,108 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 
+enum ApiKeyValidationStatus {
+  valid,
+  serverBusy,
+  invalid,
+}
+
 class GeminiService {
   final String apiKey;
-  late GenerativeModel _model;
 
-  GeminiService(this.apiKey) {
-    _model = GenerativeModel(model: 'gemini-3.6-flash', apiKey: apiKey);
-  }
+  static const List<String> _candidateModels = [
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.7-flash',
+    'gemini-flash-lite-latest',
+  ];
+
+  GeminiService(this.apiKey);
 
   bool get _isConfigured => apiKey.trim().isNotEmpty;
 
   static const String _configurationMessage =
-      'AI features are not configured in this build. Please contact support.';
+      'Please configure your Gemini API key in AI Chat or Settings to use this feature.';
+
+  static Future<ApiKeyValidationStatus> testApiKey(String key) async {
+    final cleanKey = key.trim();
+    if (cleanKey.isEmpty) return ApiKeyValidationStatus.invalid;
+
+    bool sawServerBusy = false;
+
+    for (final modelName in _candidateModels) {
+      try {
+        final testModel = GenerativeModel(
+          model: modelName,
+          apiKey: cleanKey,
+        );
+        final response = await testModel.generateContent([
+          Content.text('Ping'),
+        ]);
+        if (response.text != null && response.text!.isNotEmpty) {
+          return ApiKeyValidationStatus.valid;
+        }
+      } catch (e) {
+        final errStr = e.toString();
+        // A 503 / UNAVAILABLE / high demand error means the server is temporarily busy.
+        // We do NOT treat this as a valid key. We record it to inform the user that Google is busy.
+        if (errStr.contains('503') ||
+            errStr.contains('high demand') ||
+            errStr.contains('UNAVAILABLE') ||
+            errStr.contains('RESOURCE_EXHAUSTED') ||
+            errStr.contains('429')) {
+          sawServerBusy = true;
+        }
+        continue;
+      }
+    }
+
+    if (sawServerBusy) {
+      return ApiKeyValidationStatus.serverBusy;
+    }
+
+    return ApiKeyValidationStatus.invalid;
+  }
+
+  Future<String> _generateWithFallback(List<Content> contents) async {
+    Object? lastError;
+    for (final modelName in _candidateModels) {
+      try {
+        final model = GenerativeModel(model: modelName, apiKey: apiKey);
+        final response = await model.generateContent(contents);
+        if (response.text != null && response.text!.trim().isNotEmpty) {
+          return response.text!;
+        }
+      } catch (e) {
+        lastError = e;
+        continue;
+      }
+    }
+
+    if (lastError != null) {
+      final errStr = lastError.toString();
+      if (errStr.contains('503') ||
+          errStr.contains('high demand') ||
+          errStr.contains('UNAVAILABLE') ||
+          errStr.contains('RESOURCE_EXHAUSTED') ||
+          errStr.contains('429') ||
+          errStr.contains('quota')) {
+        return 'The AI model is currently in high demand. Please try again in a little while.';
+      }
+      if (errStr.contains('API_KEY_INVALID') ||
+          errStr.contains('403') ||
+          errStr.contains('401')) {
+        return 'Your Gemini API key appears to be invalid or expired. Please check your key in Settings.';
+      }
+      return 'An unexpected issue occurred. Please try again later.';
+    }
+
+    return 'I couldn\'t generate a response. Please try again.';
+  }
 
   Future<String> prompt(String context, String userMessage) async {
     if (!_isConfigured) return _configurationMessage;
-    try {
-      final content = [Content.text(context + '\n\nUser: ' + userMessage)];
-
-      final response = await _model.generateContent(content);
-      return response.text ??
-          'I couldn\'t generate a response. Please try again.';
-    } catch (e) {
-      return 'An error occurred: $e';
-    }
+    final content = [Content.text('$context\n\nUser: $userMessage')];
+    return _generateWithFallback(content);
   }
 
   Future<String> promptChat({
@@ -32,20 +111,13 @@ class GeminiService {
     required String userMessage,
   }) async {
     if (!_isConfigured) return _configurationMessage;
-    try {
-      final historyContent = history.isNotEmpty
-          ? 'Recent Chat History:\n' + history.join('\n') + '\n\n'
-          : '';
+    final historyContent = history.isNotEmpty
+        ? 'Recent Chat History:\n${history.join('\n')}\n\n'
+        : '';
 
-      final fullPrompt = context + '\n\n' + historyContent + 'User: ' + userMessage;
-      final content = [Content.text(fullPrompt)];
-
-      final response = await _model.generateContent(content);
-      return response.text ??
-          'I couldn\'t generate a response. Please try again.';
-    } catch (e) {
-      return 'An error occurred: $e';
-    }
+    final fullPrompt = '$context\n\n${historyContent}User: $userMessage';
+    final content = [Content.text(fullPrompt)];
+    return _generateWithFallback(content);
   }
 
   Future<String> buildContext({
@@ -111,13 +183,10 @@ Format your response as a brief, motivating weekly summary. Do not use headings
 unless they make the response clearer.
 ''';
 
-      final content = [Content.text(systemPrompt + '\n\n' + weeklyData)];
-
-      final response = await _model.generateContent(content);
-      return response.text ??
-          'I couldn\'t generate your weekly review. Try again next week!';
+      final content = [Content.text('$systemPrompt\n\n$weeklyData')];
+      return _generateWithFallback(content);
     } catch (e) {
-      return 'Weekly review generation encountered an issue: $e. I\'ll try again next week!';
+      return 'Weekly review generation encountered an issue. I\'ll try again next week!';
     }
   }
 }

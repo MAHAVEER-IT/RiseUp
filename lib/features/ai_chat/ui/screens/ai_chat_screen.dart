@@ -1,12 +1,15 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riseup/core/network/gemini_provider.dart';
+import 'package:riseup/core/network/gemini_service.dart';
 import 'package:riseup/features/ai_chat/models/message.dart';
 import 'package:riseup/features/ai_chat/providers/chat_provider.dart';
 import 'package:riseup/features/settings/providers/user_profile_provider.dart';
 import 'package:riseup/features/goals/providers/todo_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AIChatScreen extends ConsumerStatefulWidget {
   const AIChatScreen({Key? key}) : super(key: key);
@@ -109,11 +112,18 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
           .read(conversationMessagesProvider.notifier)
           .addMessage(response, SenderType.ai);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      final errStr = e.toString();
+      final friendlyError = (errStr.contains('503') ||
+              errStr.contains('high demand') ||
+              errStr.contains('UNAVAILABLE') ||
+              errStr.contains('RESOURCE_EXHAUSTED') ||
+              errStr.contains('429'))
+          ? 'The AI model is currently in high demand. Please try again in a little while.'
+          : 'An unexpected issue occurred. Please try again later.';
+
+      ref
+          .read(conversationMessagesProvider.notifier)
+          .addMessage(friendlyError, SenderType.ai);
     }
 
     if (mounted) {
@@ -169,6 +179,7 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
 
   @override
   Widget build(BuildContext context) {
+    final hasApiKey = ref.watch(hasGeminiKeyProvider);
     final messagesState = ref.watch(conversationMessagesProvider);
 
     return Scaffold(
@@ -207,24 +218,28 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
             ),
           ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.82)),
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.delete_sweep_rounded),
-                color: const Color(0xFF20332F),
-                tooltip: 'Delete chat',
-                onPressed: _showDeleteDialog,
-              ),
-            ),
-          ),
-        ],
+        actions: hasApiKey
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.82),
+                      ),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.delete_sweep_rounded),
+                      color: const Color(0xFF20332F),
+                      tooltip: 'Delete chat',
+                      onPressed: _showDeleteDialog,
+                    ),
+                  ),
+                ),
+              ]
+            : null,
       ),
       body: Stack(
         children: [
@@ -246,39 +261,41 @@ class _AIChatScreenState extends ConsumerState<AIChatScreen>
                   begin: const Offset(0, 0.035),
                   end: Offset.zero,
                 ).animate(_introAnimation),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: messagesState.when(
-                        data: (messages) {
-                          if (messages.isEmpty) {
-                            return _EmptyChatState(
-                              suggestions: _suggestions,
-                              onSuggestionTap: _sendMessage,
-                            );
-                          }
+                child: !hasApiKey
+                    ? const _EnableAiView()
+                    : Column(
+                        children: [
+                          Expanded(
+                            child: messagesState.when(
+                              data: (messages) {
+                                if (messages.isEmpty) {
+                                  return _EmptyChatState(
+                                    suggestions: _suggestions,
+                                    onSuggestionTap: _sendMessage,
+                                  );
+                                }
 
-                          return _MessageList(
-                            messages: messages,
+                                return _MessageList(
+                                  messages: messages,
+                                  isLoading: _isLoading,
+                                );
+                              },
+                              loading: () => const Center(
+                                child: CircularProgressIndicator(strokeWidth: 3),
+                              ),
+                              error: (error, _) => _ChatErrorState(
+                                message: 'Error: $error',
+                              ),
+                            ),
+                          ),
+                          _Composer(
+                            controller: _messageController,
+                            focusNode: _messageFocusNode,
                             isLoading: _isLoading,
-                          );
-                        },
-                        loading: () => const Center(
-                          child: CircularProgressIndicator(strokeWidth: 3),
-                        ),
-                        error: (error, _) => _ChatErrorState(
-                          message: 'Error: $error',
-                        ),
+                            onSend: _sendMessage,
+                          ),
+                        ],
                       ),
-                    ),
-                    _Composer(
-                      controller: _messageController,
-                      focusNode: _messageFocusNode,
-                      isLoading: _isLoading,
-                      onSend: _sendMessage,
-                    ),
-                  ],
-                ),
               ),
             ),
           ),
@@ -831,5 +848,474 @@ class _ChatBackdropPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ChatBackdropPainter oldDelegate) {
     return oldDelegate.progress != progress;
+  }
+}
+
+class _EnableAiView extends ConsumerStatefulWidget {
+  const _EnableAiView();
+
+  @override
+  ConsumerState<_EnableAiView> createState() => _EnableAiViewState();
+}
+
+class _EnableAiViewState extends ConsumerState<_EnableAiView> {
+  final TextEditingController _keyController = TextEditingController();
+  bool _isObscured = true;
+  bool _isValidating = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _keyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null && data!.text!.trim().isNotEmpty) {
+      setState(() {
+        _keyController.text = data.text!.trim();
+        _errorMessage = null;
+      });
+    }
+  }
+
+  Future<void> _openAiStudio() async {
+    final uri = Uri.parse('https://aistudio.google.com/app/apikey');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open browser. Please visit aistudio.google.com manually.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitKey() async {
+    final key = _keyController.text.trim();
+    if (key.isEmpty) {
+      setState(() => _errorMessage = 'Please paste your Gemini API key');
+      return;
+    }
+
+    setState(() {
+      _isValidating = true;
+      _errorMessage = null;
+    });
+
+    final status = await GeminiService.testApiKey(key);
+
+    if (!mounted) return;
+
+    if (status == ApiKeyValidationStatus.valid) {
+      await ref.read(geminiApiKeyProvider.notifier).setApiKey(key);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('AI enabled successfully! Welcome to RiseUp AI 🌸'),
+            backgroundColor: Color(0xFF25463C),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        _isValidating = false;
+        if (status == ApiKeyValidationStatus.serverBusy) {
+          _errorMessage = 'Google is busy, try again.';
+        } else {
+          _errorMessage =
+              'Could not verify API key with Google Gemini. Please check the key from Google AI Studio and try again.';
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF25463C), Color(0xFF427464)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF25463C).withValues(alpha: 0.28),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 34,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Enable RiseUp AI',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF20332F),
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Connect your free Google Gemini API key to activate empathetic coaching, daily conversation, and weekly reviews.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: Color(0xFF65706B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.95)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2E4D40).withValues(alpha: 0.05),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.menu_book_rounded,
+                      size: 18,
+                      color: Color(0xFF4D8C76),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Quick 3-Step Setup',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF20332F),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _StepRow(
+                  number: '1',
+                  title: 'Open Google AI Studio (Free)',
+                  description: 'Sign in with any Google account.',
+                  actionWidget: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: OutlinedButton.icon(
+                      onPressed: _openAiStudio,
+                      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                      label: const Text('Get Gemini API Key'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF25463C),
+                        side: const BorderSide(color: Color(0xFF4D8C76)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const _StepRow(
+                  number: '2',
+                  title: 'Click "Create API key"',
+                  description:
+                      'Select your project or create a default one in one click.',
+                ),
+                const SizedBox(height: 14),
+                const _StepRow(
+                  number: '3',
+                  title: 'Copy & paste it below',
+                  description: 'Paste the key into the box and tap Enable AI.',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _errorMessage != null
+                    ? Colors.red.withValues(alpha: 0.5)
+                    : Colors.white.withValues(alpha: 0.95),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2E4D40).withValues(alpha: 0.05),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Your Gemini API Key',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF20332F),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _keyController,
+                  obscureText: _isObscured,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'AIzaSy...',
+                    hintStyle: TextStyle(
+                      color: const Color(0xFF65706B).withValues(alpha: 0.6),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF7F5EE),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            _isObscured
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            size: 20,
+                            color: const Color(0xFF65706B),
+                          ),
+                          onPressed: () =>
+                              setState(() => _isObscured = !_isObscured),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.content_paste_rounded,
+                            size: 20,
+                            color: Color(0xFF4D8C76),
+                          ),
+                          tooltip: 'Paste',
+                          onPressed: _pasteFromClipboard,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _errorMessage!,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: _isValidating ? null : _submitKey,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF25463C),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _isValidating
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.bolt_rounded, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Enable AI',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F2EC).withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF4D8C76).withValues(alpha: 0.25),
+              ),
+            ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.shield_outlined,
+                  size: 20,
+                  color: Color(0xFF25463C),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Your key stays on this device.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF20332F),
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'AI requests are sent directly to Google Gemini. RiseUp never stores your key on any server or shares it with anyone.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Color(0xFF53635C),
+                          height: 1.35,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepRow extends StatelessWidget {
+  const _StepRow({
+    required this.number,
+    required this.title,
+    required this.description,
+    this.actionWidget,
+  });
+
+  final String number;
+  final String title;
+  final String description;
+  final Widget? actionWidget;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF25463C).withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            number,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF25463C),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF20332F),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF65706B),
+                  height: 1.3,
+                ),
+              ),
+              if (actionWidget != null) actionWidget!,
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

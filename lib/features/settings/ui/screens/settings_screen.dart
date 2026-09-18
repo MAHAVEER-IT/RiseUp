@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riseup/core/network/gemini_provider.dart';
+import 'package:riseup/core/network/gemini_service.dart';
 import 'package:riseup/core/notifications/notification_service.dart';
 import 'package:riseup/features/companion/models/companion_mode.dart';
 import 'package:riseup/features/settings/models/user_profile.dart';
 import 'package:riseup/features/settings/providers/user_profile_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -124,6 +128,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           ),
                           const SizedBox(height: 22),
                           const _CompanionSection(),
+                          const SizedBox(height: 22),
+                          const _AiSettingsSection(),
                           const SizedBox(height: 28),
                           const _DeviceDataNotice(),
                           const SizedBox(height: 36),
@@ -1005,5 +1011,552 @@ class _SettingsBackdropPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SettingsBackdropPainter oldDelegate) {
     return oldDelegate.progress != progress;
+  }
+}
+
+class _AiSettingsSection extends ConsumerStatefulWidget {
+  const _AiSettingsSection();
+
+  @override
+  ConsumerState<_AiSettingsSection> createState() => _AiSettingsSectionState();
+}
+
+class _AiSettingsSectionState extends ConsumerState<_AiSettingsSection> {
+  bool _isTestingKey = false;
+
+  Future<void> _testCurrentKey(String key) async {
+    setState(() => _isTestingKey = true);
+    final status = await GeminiService.testApiKey(key);
+    if (!mounted) return;
+    setState(() => _isTestingKey = false);
+
+    if (status == ApiKeyValidationStatus.valid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gemini API key is working properly! ✨'),
+          backgroundColor: Color(0xFF25463C),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else if (status == ApiKeyValidationStatus.serverBusy) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google is busy, try again.'),
+          backgroundColor: Color(0xFFD97706),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'API key test failed. Please verify your key with Google AI Studio.',
+          ),
+          backgroundColor: Color(0xFFD9534F),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _confirmRemoveKey() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Remove Gemini API Key?',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF20332F),
+          ),
+        ),
+        content: const Text(
+          'Removing your key will disable AI Chat and Weekly Insights until you add a new key.',
+          style: TextStyle(color: Color(0xFF65706B), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF65706B)),
+            ),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await ref.read(geminiApiKeyProvider.notifier).removeApiKey();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Gemini API key removed from device.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFD9534F),
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showKeyDialog([String? existingKey]) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _ApiKeyEntryDialog(existingKey: existingKey),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyAsync = ref.watch(geminiApiKeyProvider);
+    final currentKey = keyAsync.value;
+    final hasKey = currentKey != null && currentKey.trim().isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(
+          title: 'AI Companion & Privacy',
+          subtitle: 'Direct Google Gemini integration stored on-device',
+        ),
+        const SizedBox(height: 14),
+        _GlassPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _IconBadge(
+                    icon: Icons.auto_awesome_rounded,
+                    color: hasKey
+                        ? const Color(0xFF4D8C76)
+                        : const Color(0xFF86928C),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Google Gemini Flash',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF243C36),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          hasKey
+                              ? 'Active • Encrypted on device'
+                              : 'Not configured • Key required for AI',
+                          style: const TextStyle(
+                            color: Color(0xFF65706B),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (hasKey
+                              ? const Color(0xFF4D8C76)
+                              : const Color(0xFF86928C))
+                          .withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      hasKey ? 'Active' : 'Disabled',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: hasKey
+                            ? const Color(0xFF2E6351)
+                            : const Color(0xFF5B6963),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (hasKey) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F6F2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE2E7DF)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.key_rounded,
+                        size: 16,
+                        color: Color(0xFF4D8C76),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          currentKey.length > 8
+                              ? '${currentKey.substring(0, 6)}••••••••${currentKey.substring(currentKey.length - 4)}'
+                              : '••••••••',
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2E4D40),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _isTestingKey
+                          ? null
+                          : () => _testCurrentKey(currentKey),
+                      icon: _isTestingKey
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF25463C),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.check_circle_outline_rounded,
+                              size: 16,
+                            ),
+                      label: const Text('Test key'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF25463C),
+                        side: const BorderSide(color: Color(0xFFC7D3CD)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _showKeyDialog(currentKey),
+                      icon: const Icon(Icons.edit_rounded, size: 16),
+                      label: const Text('Change key'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF25463C),
+                        side: const BorderSide(color: Color(0xFFC7D3CD)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _confirmRemoveKey,
+                      icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                      label: const Text('Remove key'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFD9534F),
+                        side: const BorderSide(color: Color(0xFFF0B8B6)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const Text(
+                  'No API key configured. Provide your free Gemini key to unlock AI Chat companion and Weekly Reviews.',
+                  style: TextStyle(color: Color(0xFF65706B), height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () => _showKeyDialog(),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Set Up Gemini Key'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF25463C),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F2EC).withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF4D8C76).withValues(alpha: 0.2),
+                  ),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 18,
+                      color: Color(0xFF25463C),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Your key stays on this device. AI requests are sent directly to Google Gemini.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF385248),
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ApiKeyEntryDialog extends ConsumerStatefulWidget {
+  const _ApiKeyEntryDialog({this.existingKey});
+
+  final String? existingKey;
+
+  @override
+  ConsumerState<_ApiKeyEntryDialog> createState() => _ApiKeyEntryDialogState();
+}
+
+class _ApiKeyEntryDialogState extends ConsumerState<_ApiKeyEntryDialog> {
+  late final TextEditingController _controller;
+  bool _isObscured = true;
+  bool _isValidating = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.existingKey ?? '');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null && data!.text!.trim().isNotEmpty) {
+      setState(() {
+        _controller.text = data.text!.trim();
+        _error = null;
+      });
+    }
+  }
+
+  Future<void> _openStudio() async {
+    final uri = Uri.parse('https://aistudio.google.com/app/apikey');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  Future<void> _save() async {
+    final key = _controller.text.trim();
+    if (key.isEmpty) {
+      setState(() => _error = 'Please enter an API key');
+      return;
+    }
+
+    setState(() {
+      _isValidating = true;
+      _error = null;
+    });
+
+    final status = await GeminiService.testApiKey(key);
+    if (!mounted) return;
+
+    if (status == ApiKeyValidationStatus.valid) {
+      await ref.read(geminiApiKeyProvider.notifier).setApiKey(key);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gemini API key saved successfully! ✨'),
+            backgroundColor: Color(0xFF25463C),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        _isValidating = false;
+        if (status == ApiKeyValidationStatus.serverBusy) {
+          _error = 'Google is busy, try again.';
+        } else {
+          _error =
+              'Could not verify API key with Google. Please check the key and try again.';
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      title: Text(
+        widget.existingKey == null
+            ? 'Set Up Gemini API Key'
+            : 'Change Gemini API Key',
+        style: const TextStyle(
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF20332F),
+        ),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your personal Google Gemini API key to activate AI features.',
+              style: TextStyle(
+                color: Color(0xFF65706B),
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              obscureText: _isObscured,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              decoration: InputDecoration(
+                hintText: 'AIzaSy...',
+                filled: true,
+                fillColor: const Color(0xFFF7F5EE),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        _isObscured
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 18,
+                        color: const Color(0xFF65706B),
+                      ),
+                      onPressed: () =>
+                          setState(() => _isObscured = !_isObscured),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.content_paste_rounded,
+                        size: 18,
+                        color: Color(0xFF4D8C76),
+                      ),
+                      onPressed: _paste,
+                      tooltip: 'Paste',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _openStudio,
+              icon: const Icon(Icons.open_in_new_rounded, size: 15),
+              label: const Text('Get API key from Google AI Studio'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4D8C76),
+                padding: EdgeInsets.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isValidating ? null : () => Navigator.pop(context),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: Color(0xFF65706B)),
+          ),
+        ),
+        FilledButton(
+          onPressed: _isValidating ? null : _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF25463C),
+          ),
+          child: _isValidating
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Save & Verify'),
+        ),
+      ],
+    );
   }
 }
